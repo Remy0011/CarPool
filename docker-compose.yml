@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  web:
+    image: php:apache
+    container_name: my-php-app
+    ports:
+      - "5780:80"
+    volumes:
+      - .:/var/www/html
+    environment:
+      - PHP_ERROR_REPORTING=E_ALL
