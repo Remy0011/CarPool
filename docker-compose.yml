@@ -7,6 +7,6 @@ services:
     ports:
       - "5780:80"
     volumes:
-      - .:/var/www/html
+      - ./public:/var/www/html
     environment:
       - PHP_ERROR_REPORTING=E_ALL
