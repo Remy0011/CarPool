@@ -13,16 +13,16 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="#">Profil</a>
+                    <a class="nav-link" href="?page=Profil">Profil</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="#">Réservation</a>
+                    <a class="nav-link" href="?page=Reservation">Réservation</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="#">Map</a>
+                    <a class="nav-link" href="?page=Map">Map</a>
                 </li>
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="#" role="button" aria-haspopup="true" aria-expanded="false">Paramètres</a>
+                    <a class="nav-link dropdown-toggle" data-bs-toggle="dropdown" href="?page=Parametre" role="button" aria-haspopup="true" aria-expanded="false">Paramètres</a>
                     <div class="dropdown-menu">
                         <a class="dropdown-item" href="#">Action</a>
                         <a class="dropdown-item" href="#">Another action</a>
