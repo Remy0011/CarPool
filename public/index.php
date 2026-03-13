@@ -6,15 +6,9 @@ $page = $_GET['page'] ?? 'Home';
 //die (var_dump($page));
 
 if (!in_array($page, $allowed_pages, true)) {
-    $page = 'Home';
+    $page = '404';
 }
 
-// Vérifier si le fichier existe
-if (file_exists($page)) {
-    include $page;
-} else {
-    include '404.php'; // Page d'erreur 404
-}
 
 require "doctype.php";
 require "navbar.php";
