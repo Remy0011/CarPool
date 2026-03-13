@@ -1,4 +1,6 @@
 <?php
+session_start();
+
 $allowed_pages = ['Home','Profil','Reservation','Map'];
 
 $page = $_GET['page'] ?? 'Home';

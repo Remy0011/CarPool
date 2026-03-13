@@ -12,6 +12,6 @@
     <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
 
-    <link rel="stylesheet" href="carpool.css">
+<!--    <link rel="stylesheet" href="carpool.css">-->
 </head>
 <body>
