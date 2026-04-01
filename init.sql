@@ -127,9 +127,9 @@ CREATE TABLE ASSO5 (
 
 -- Insertion d'utilisateurs
 INSERT INTO users (user_name, user_password, user_email) VALUES
-                                                             ('john_doe', 'hashed_password_123', 'john@example.com'),
-                                                             ('jane_smith', 'hashed_password_456', 'jane@example.com'),
-                                                             ('bob_wilson', 'hashed_password_789', 'bob@example.com');
+                                                             ('john_doe', '$2y$10$.kFFkno0I2gu.ZDny3WWy.KOLgdpk9Fp0HLz6aeIpACxXIUS/6/ny', 'john@example.com'),
+                                                             ('jane_smith', '$2y$10$7yF5Rn2feSZzOXJzkVThl.aM41d89mYA9KKb/uQWYf/F6jF7xg6yK', 'jane@example.com'),
+                                                             ('bob_wilson', '$2y$10$bA8cLDaSfxOYI5WWK4YJWuw8ra5VKgHCKVMHggU0hrsFCv2AfUP1q', 'bob@example.com');
 
 -- Insertion d'employés (liés aux utilisateurs)
 INSERT INTO employees (name, users_id) VALUES

@@ -1,11 +1,10 @@
 <?php
 session_start();
 
-$allowed_pages = ['Home','Profil','Reservation','Map'];
+$allowed_pages = ['home','Profil','Reservation','Map',];
 
-$page = $_GET['page'] ?? 'Home';
+$page = $_GET['page'] ?? 'home';
 
-//die (var_dump($page));
 
 if (!in_array($page, $allowed_pages, true)) {
     $page = '404';
