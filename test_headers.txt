@@ -1,0 +1,12 @@
+HTTP/1.1 302 Found
+Host: localhost:5780
+Date: Thu, 02 Apr 2026 14:31:57 GMT
+Connection: close
+X-Powered-By: PHP/8.4.16
+Set-Cookie: PHPSESSID=44e263d2231249fe662273b429ebba96; path=/
+Expires: Thu, 19 Nov 1981 08:52:00 GMT
+Cache-Control: no-store, no-cache, must-revalidate
+Pragma: no-cache
+Location: index.php
+Content-type: text/html; charset=UTF-8
+
