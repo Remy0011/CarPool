@@ -25,7 +25,7 @@
                     <a class="nav-link" href="?page=Parametre">Paramètres</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="?page=Deconnexion">Déconnexion</a>
+                    <a class="nav-link" href="deconnexion.php">Déconnexion</a>
                 </li>
             </ul>
             <form class="d-flex">

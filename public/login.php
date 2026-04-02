@@ -1,5 +1,5 @@
 <?php
-
+session_start();
 require_once 'config.php';
 
 $error = '';
@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($user && password_verify($password, $user['user_password'])) {
                 $_SESSION['user_name']  = $user['user_name'];
                 $_SESSION['user_email'] = $user['user_email'];
+                header('Location: index.php');
                 exit;
             } else {
                 $error = 'Email ou mot de passe invalide.';

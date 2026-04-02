@@ -126,10 +126,11 @@ CREATE TABLE ASSO5 (
 -- ============================================================
 
 -- Insertion d'utilisateurs
+-- All seeded users have password: test123
 INSERT INTO users (user_name, user_password, user_email) VALUES
-                                                             ('john_doe', '$2y$10$.kFFkno0I2gu.ZDny3WWy.KOLgdpk9Fp0HLz6aeIpACxXIUS/6/ny', 'john@example.com'),
-                                                             ('jane_smith', '$2y$10$7yF5Rn2feSZzOXJzkVThl.aM41d89mYA9KKb/uQWYf/F6jF7xg6yK', 'jane@example.com'),
-                                                             ('bob_wilson', '$2y$10$bA8cLDaSfxOYI5WWK4YJWuw8ra5VKgHCKVMHggU0hrsFCv2AfUP1q', 'bob@example.com');
+                                                             ('john_doe', '$2y$12$2KmCeD1eXWxKDCV9G78kYOvTkBM8DQHxD9Z6ryWH.af0rwNI0g3pq', 'john@example.com'),
+                                                             ('jane_smith', '$2y$12$tAKfxjKaNxIqlmgZoaBGjubdzrxTe6u6v8Dy7IGeEzmlnNNxnuAOC', 'jane@example.com'),
+                                                             ('bob_wilson', '$2y$12$l6VLvZXcC6pz2/1NYP1SduhCS78e38eIxAzIATTh13LzdeJnmtA5e', 'bob@example.com');
 
 -- Insertion d'employés (liés aux utilisateurs)
 INSERT INTO employees (name, users_id) VALUES

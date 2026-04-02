@@ -1,10 +1,13 @@
 <?php
-define('DB_HOST', 'mysql');
-define('DB_PORT', '3306');          // <- port séparé
-define('DB_NAME', 'mydatabase');
-define('DB_USER', 'user');
-define('DB_PASS', 'password');
-define('DB_CHARSET', 'utf8mb4');
+// Environment-aware DB config:
+// - In Docker: uses 'mysql' host on port 3306 (service name from docker-compose.yml)
+// - On Mac local dev: uses 127.0.0.1 on port 10012 (docker-compose-mac.yml)
+define('DB_HOST',    getenv('DB_HOST')    ?: '127.0.0.1');
+define('DB_PORT',    getenv('DB_PORT')    ?: '10012');
+define('DB_NAME',    getenv('DB_NAME')    ?: 'mydatabase');
+define('DB_USER',    getenv('DB_USER')    ?: 'user');
+define('DB_PASS',    getenv('DB_PASS')    ?: 'password');
+define('DB_CHARSET', getenv('DB_CHARSET') ?: 'utf8mb4');
 
 function getDB(): PDO {
     static $pdo = null;
@@ -18,4 +21,3 @@ function getDB(): PDO {
     }
     return $pdo;
 }
-?>
