@@ -12,8 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['journey_id'])) {
         $stmt = $pdo->prepare('
             SELECT p.passengers_id
             FROM passengers p
-            JOIN employees e ON p.employees_id = e.employees_id
-            JOIN users u ON e.users_id = u.users_id
+            JOIN users u ON p.users_id = u.users_id
             WHERE u.user_email = ?
         ');
         $stmt->execute([$_SESSION['user_email']]);
@@ -80,7 +79,7 @@ if ($journeys) {
 }
 ?>
 
-<div class="container my-4">
+<main class="container reservation-shell">
     <h2 class="mb-4">Réservation de trajets</h2>
 
     <?php if ($message): ?>
@@ -124,7 +123,7 @@ if ($journeys) {
                             </td>
                             <td>
                                 <?php if ($remaining > 0): ?>
-                                    <form method="POST" style="display:inline;">
+                                    <form method="POST" class="inline-form">
                                         <input type="hidden" name="journey_id" value="<?= $j['journeys_id'] ?>">
                                         <button type="submit" class="btn btn-primary btn-sm">Réserver</button>
                                     </form>
@@ -138,4 +137,4 @@ if ($journeys) {
             </table>
         </div>
     <?php endif; ?>
-</div>
+</main>

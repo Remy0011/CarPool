@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+namespace CarPool\Tests;
+
+use PDO;
 use PHPUnit\Framework\TestCase;
 
 final class ReservationTest extends TestCase
@@ -42,8 +45,7 @@ final class ReservationTest extends TestCase
         $stmt = $this->pdo->prepare('
             SELECT p.passengers_id
             FROM passengers p
-            JOIN employees e ON p.employees_id = e.employees_id
-            JOIN users u ON e.users_id = u.users_id
+            JOIN users u ON p.users_id = u.users_id
             WHERE u.user_email = ?
         ');
         $stmt->execute(['bob@example.com']);
@@ -58,8 +60,7 @@ final class ReservationTest extends TestCase
         $stmt = $this->pdo->prepare('
             SELECT p.passengers_id
             FROM passengers p
-            JOIN employees e ON p.employees_id = e.employees_id
-            JOIN users u ON e.users_id = u.users_id
+            JOIN users u ON p.users_id = u.users_id
             WHERE u.user_email = ?
         ');
         $stmt->execute(['john@example.com']);

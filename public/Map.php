@@ -1,3 +1,5 @@
-<div id="map" style="width: 100%; height: 500px"></div>
+<main class="container map-shell">
+    <div id="map" class="map-canvas"></div>
+</main>
 <script src="/MapLibreLoader.js"></script>
 
