@@ -40,6 +40,7 @@ a {
 .app-page {
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
 }
 
 .app-page main,
@@ -71,6 +72,7 @@ a {
     width: min(100%, 460px);
     text-align: center;
     padding: 2rem;
+    animation: rise-in 0.7s ease-out both;
 }
 
 .loading-wrap h1 {
@@ -190,6 +192,7 @@ a {
     backdrop-filter: blur(8px);
     box-shadow: var(--shadow);
     padding: 2.5rem 2.25rem;
+    animation: rise-in 0.65s ease-out both;
 }
 
 .card-header {
@@ -347,6 +350,7 @@ button[type="submit"]:hover {
     height: 44px;
     object-fit: contain;
     filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.2));
+    animation: float-soft 3.8s ease-in-out infinite;
 }
 
 .nav-link {
@@ -426,6 +430,7 @@ button[type="submit"]:hover {
     padding: 2rem;
     background: var(--surface);
     box-shadow: var(--shadow);
+    animation: rise-in 0.75s ease-out both;
 }
 
 .welcome-avatar {
@@ -471,6 +476,7 @@ button[type="submit"]:hover {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
     overflow: hidden;
+    animation: rise-in 0.8s ease-out both;
 }
 
 .table {
@@ -609,7 +615,7 @@ button[type="submit"]:hover {
 
 .map-canvas {
     width: 100%;
-    height: 500px;
+    height: min(62vh, 500px);
     border: 1px solid rgba(17, 9, 62, 0.1);
     border-radius: 24px;
     overflow: hidden;
@@ -623,6 +629,29 @@ footer {
     border-top: 3px solid var(--brand);
 }
 
+@keyframes rise-in {
+    from {
+        opacity: 0;
+        transform: translateY(24px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes float-soft {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
 @keyframes wheel-spin {
     from {
         transform: rotate(0deg);
@@ -634,8 +663,32 @@ footer {
 }
 
 @media (max-width: 991.98px) {
+    .navbar .container {
+        gap: 0.75rem;
+    }
+
+    .navbar-collapse {
+        margin-top: 0.85rem;
+        padding: 1rem;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(10px);
+    }
+
+    .navbar-nav {
+        gap: 0.35rem;
+    }
+
+    .nav-link {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
     .navbar .d-flex {
         margin-top: 1rem;
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
     }
 
     .welcome-card,
@@ -650,9 +703,100 @@ footer {
 }
 
 @media (max-width: 767.98px) {
+    html {
+        font-size: 15px;
+    }
+
+    .login-page,
+    .loading-page {
+        padding: 1.25rem 0.85rem;
+    }
+
+    .loading-wrap,
+    .login-page .card,
+    .welcome-card {
+        width: 100%;
+    }
+
+    .loading-wrap {
+        padding: 1.25rem 0.5rem;
+    }
+
+    .loading-logo,
+    .login-logo {
+        width: min(200px, 70%);
+    }
+
+    .wheel-loader {
+        width: 132px;
+        height: 132px;
+    }
+
+    .wheel-loader::before {
+        width: 68px;
+        margin-left: 66px;
+    }
+
+    .wheel-loader::after {
+        width: 46px;
+        margin-left: 96px;
+    }
+
+    .wheel-tire {
+        border-width: 13px;
+    }
+
+    .wheel-rim {
+        width: 82px;
+        height: 82px;
+        border-width: 8px;
+    }
+
+    .spoke {
+        width: 10px;
+        height: 34px;
+        margin: -17px 0 0 -5px;
+    }
+
+    .wheel-core {
+        width: 22px;
+        height: 22px;
+        margin: -11px 0 0 -11px;
+        border-width: 4px;
+    }
+
     .reservation-shell,
     .map-shell {
         padding-top: 1.25rem;
+        padding-bottom: 1.25rem;
+    }
+
+    .navbar {
+        padding-top: 0.65rem;
+        padding-bottom: 0.65rem;
+    }
+
+    .brand-mark {
+        gap: 0.55rem;
+    }
+
+    .brand-logo {
+        width: 34px;
+        height: 34px;
+    }
+
+    .navbar-brand {
+        letter-spacing: 0.08em;
+        font-size: 1rem;
+    }
+
+    .navbar-text {
+        width: 100%;
+        text-align: center;
+    }
+
+    .btn.btn-outline-light.btn-sm {
+        width: 100%;
     }
 
     .error-card {
@@ -671,8 +815,71 @@ footer {
         padding: 1.5rem;
     }
 
+    .table-responsive {
+        border-radius: 20px;
+        overflow-x: auto;
+    }
+
     .table > :not(caption) > * > * {
         padding: 0.8rem 0.7rem;
         font-size: 0.92rem;
+        white-space: nowrap;
+    }
+
+    .map-canvas {
+        height: 360px;
+        border-radius: 20px;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .login-page .card {
+        padding: 1.25rem 1rem;
+        border-radius: 20px;
+    }
+
+    .card-header {
+        margin-bottom: 1.35rem;
+    }
+
+    .card-header h1,
+    .welcome-card h2,
+    .loading-wrap h1 {
+        line-height: 1.1;
+    }
+
+    .welcome-card {
+        padding: 1.35rem 1rem;
+        border-radius: 22px;
+    }
+
+    .welcome-avatar {
+        width: 60px;
+        height: 60px;
+        font-size: 1.25rem;
+    }
+
+    .nav-link {
+        padding: 0.7rem 0.8rem !important;
+    }
+
+    .nav-icon-badge {
+        width: 26px;
+        height: 26px;
+        flex-basis: 26px;
+    }
+
+    .nav-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .table {
+        min-width: 640px;
+    }
+
+    footer {
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
 }
