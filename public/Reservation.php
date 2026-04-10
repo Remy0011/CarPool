@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Europe/Paris');
 $pdo = getDB();
 $message = '';
 $messageType = '';
@@ -20,35 +21,37 @@ function findPassengerId(PDO $pdo, string $email): ?int
 
 function buildJourneyPayload(array $input): array
 {
-    $start = trim($input['start'] ?? '');
-    $final = trim($input['final'] ?? '');
-    $travelTime = trim($input['travel_time'] ?? '');
-    $startOfHours = trim($input['start_of_hours'] ?? '');
+    $startLocation = trim($input['start'] ?? '');
+    $finalLocation = trim($input['final'] ?? '');
+    $durationInput = trim($input['travel_time'] ?? ''); // Format: HH:mm
+    $startOfHours = trim($input['start_of_hours'] ?? ''); // Format: Y-m-d\TH:i from datetime-local
     $conductorsId = (int) ($input['conductors_id'] ?? 0);
-    $placeAvailable = (int) ($input['place_available'] ?? -1);
 
-    if ($start === '' || $final === '' || $travelTime === '' || $startOfHours === '' || $conductorsId <= 0 || $placeAvailable < 0) {
-        throw new InvalidArgumentException('Tous les champs du trajet sont obligatoires.');
+    if ($startLocation === '' || $finalLocation === '' || $durationInput === '' || $startOfHours === '' || $conductorsId <= 0) {
+        throw new InvalidArgumentException('Tous les champs sont obligatoires.');
     }
 
+    // 1. Parse the Start Date (from datetime-local input)
     $startDate = DateTime::createFromFormat('Y-m-d\TH:i', $startOfHours);
-    $duration = DateInterval::createFromDateString($travelTime);
-
-    if (!$startDate || $duration === false) {
-        throw new InvalidArgumentException('Le format de date ou de duree est invalide.');
+    if (!$startDate) {
+        throw new InvalidArgumentException('Format de date de départ invalide.');
     }
+
+    // 2. Parse Duration (travel_time) and calculate End Date
+    // We expect HH:mm from the time input
+    list($hours, $minutes) = explode(':', $durationInput);
+    $interval = new DateInterval("PT{$hours}H{$minutes}M");
 
     $endDate = clone $startDate;
-    $endDate->add($duration);
+    $endDate->add($interval);
 
     return [
-        'start' => $start,
-        'final' => $final,
-        'travel_time' => $travelTime . ':00',
-        'start_of_hours' => $startDate->format('Y-m-d H:i:s'),
-        'end_of_hours' => $endDate->format('Y-m-d H:i:s'),
-        'conductors_id' => $conductorsId,
-        'place_available' => $placeAvailable,
+            'start'          => $startLocation,
+            'final'          => $finalLocation,
+            'travel_time'    => $durationInput, // Stores as "00:30"
+            'start_of_hours' => $startDate->format('Y-m-d H:i:s'), // DB Format
+            'end_of_hours'   => $endDate->format('Y-m-d H:i:s'),   // Calculated
+            'conductors_id'  => $conductorsId,
     ];
 }
 
@@ -85,11 +88,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $message = 'Plus de places disponibles pour ce trajet.';
                         $messageType = 'danger';
                     } else {
+                        $pdo->beginTransaction();
+
                         $insert = $pdo->prepare('INSERT INTO ASSO4 (passengers_id, journeys_id) VALUES (?, ?)');
                         $insert->execute([$passengerId, $journeyId]);
+
+                        // Get conductor_id for this journey
+                        $getConductor = $pdo->prepare('SELECT conductors_id FROM CONDUIRE WHERE journeys_id = ?');
+                        $getConductor->execute([$journeyId]);
+                        $conductorInfo = $getConductor->fetch();
+
+                        // Decrease available places by 1
+                        $updatePlaces = $pdo->prepare('UPDATE conductors SET place_available = place_available - 1 WHERE conductors_id = ?');
+                        $updatePlaces->execute([$conductorInfo['conductors_id']]);
+
+                        $pdo->commit();
+
                         $message = 'Reservation effectuee avec succes.';
                         $messageType = 'success';
                     }
+                }
+            }
+        } elseif ($action === 'cancel' && isset($_POST['journey_id'])) {
+            $journeyId = (int) $_POST['journey_id'];
+            $passengerId = findPassengerId($pdo, $_SESSION['user_email']);
+
+            if ($passengerId === null) {
+                $message = 'Vous n\'etes pas enregistre comme passager.';
+                $messageType = 'warning';
+            } else {
+                $pdo->beginTransaction();
+
+                $delete = $pdo->prepare('DELETE FROM ASSO4 WHERE passengers_id = ? AND journeys_id = ?');
+                $delete->execute([$passengerId, $journeyId]);
+
+                if ($delete->rowCount() > 0) {
+                    // Get conductor_id for this journey
+                    $getConductor = $pdo->prepare('SELECT conductors_id FROM CONDUIRE WHERE journeys_id = ?');
+                    $getConductor->execute([$journeyId]);
+                    $conductorInfo = $getConductor->fetch();
+
+                    // Increase available places by 1
+                    $updatePlaces = $pdo->prepare('UPDATE conductors SET place_available = place_available + 1 WHERE conductors_id = ?');
+                    $updatePlaces->execute([$conductorInfo['conductors_id']]);
+
+                    $pdo->commit();
+
+                    $message = 'Reservation annulee avec succes.';
+                    $messageType = 'success';
+                } else {
+                    $pdo->rollBack();
+                    $message = 'Aucune reservation a annuler.';
+                    $messageType = 'info';
                 }
             }
         } elseif ($action === 'create') {
@@ -102,11 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 VALUES (?, ?, ?, ?, ?)
             ');
             $createJourney->execute([
-                $payload['travel_time'],
-                $payload['start'],
-                $payload['final'],
-                $payload['start_of_hours'],
-                $payload['end_of_hours'],
+                    $payload['travel_time'],
+                    $payload['start'],
+                    $payload['final'],
+                    $payload['start_of_hours'],
+                    $payload['end_of_hours'],
             ]);
 
             $journeyId = (int) $pdo->lastInsertId();
@@ -114,8 +164,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $linkConductor = $pdo->prepare('INSERT INTO CONDUIRE (conductors_id, journeys_id) VALUES (?, ?)');
             $linkConductor->execute([$payload['conductors_id'], $journeyId]);
 
-            $updatePlaces = $pdo->prepare('UPDATE conductors SET place_available = ? WHERE conductors_id = ?');
-            $updatePlaces->execute([$payload['place_available'], $payload['conductors_id']]);
+            // Set place_available to 4 for new journey
+            $updatePlaces = $pdo->prepare('UPDATE conductors SET place_available = 4 WHERE conductors_id = ?');
+            $updatePlaces->execute([$payload['conductors_id']]);
 
             $pdo->commit();
 
@@ -133,19 +184,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 WHERE journeys_id = ?
             ');
             $updateJourney->execute([
-                $payload['travel_time'],
-                $payload['start'],
-                $payload['final'],
-                $payload['start_of_hours'],
-                $payload['end_of_hours'],
-                $journeyId,
+                    $payload['travel_time'],
+                    $payload['start'],
+                    $payload['final'],
+                    $payload['start_of_hours'],
+                    $payload['end_of_hours'],
+                    $journeyId,
             ]);
 
             $updateLink = $pdo->prepare('UPDATE CONDUIRE SET conductors_id = ? WHERE journeys_id = ?');
             $updateLink->execute([$payload['conductors_id'], $journeyId]);
-
-            $updatePlaces = $pdo->prepare('UPDATE conductors SET place_available = ? WHERE conductors_id = ?');
-            $updatePlaces->execute([$payload['place_available'], $payload['conductors_id']]);
 
             $pdo->commit();
 
@@ -203,25 +251,23 @@ if ($journeys) {
 }
 
 $journeyForm = [
-    'journey_id' => 0,
-    'start' => '',
-    'final' => '',
-    'conductors_id' => $conductors[0]['conductors_id'] ?? 0,
-    'start_of_hours' => '',
-    'travel_time' => '00:30',
-    'place_available' => $conductors[0]['place_available'] ?? 1,
+        'journey_id' => 0,
+        'start' => '',
+        'final' => '',
+        'conductors_id' => $conductors[0]['conductors_id'] ?? 0,
+        'start_of_hours' => '',
+        'travel_time' => '00:30',
 ];
 
 foreach ($journeys as $journey) {
     if ((int) $journey['journeys_id'] === $editJourneyId) {
         $journeyForm = [
-            'journey_id' => (int) $journey['journeys_id'],
-            'start' => $journey['start'],
-            'final' => $journey['final'],
-            'conductors_id' => (int) $journey['conductors_id'],
-            'start_of_hours' => date('Y-m-d\TH:i', strtotime($journey['start_of_hours'])),
-            'travel_time' => substr($journey['travel_time'], 0, 5),
-            'place_available' => (int) $journey['place_available'],
+                'journey_id' => (int) $journey['journeys_id'],
+                'start' => $journey['start'],
+                'final' => $journey['final'],
+                'conductors_id' => (int) $journey['conductors_id'],
+                'start_of_hours' => date('Y-m-d\TH:i', strtotime($journey['start_of_hours'])),
+                'travel_time' => substr($journey['travel_time'], 0, 5),
         ];
         break;
     }
@@ -247,7 +293,7 @@ foreach ($journeys as $journey) {
     <section class="journey-editor-card">
         <div class="journey-editor-head">
             <h3 class="mb-1"><?= $journeyForm['journey_id'] > 0 ? 'Modifier un trajet' : 'Creer un trajet' ?></h3>
-            <p class="mb-0">Renseignez Depart, Arrivee, Conducteur, Date/Heure depart, Duree et Places.</p>
+            <p class="mb-0">Renseignez Depart, Arrivee, Conducteur, Date/Heure depart et Duree. Les places seront automatiquement gerees (max 4).</p>
         </div>
         <form method="POST" class="journey-editor-grid">
             <input type="hidden" name="action" value="<?= $journeyForm['journey_id'] > 0 ? 'update' : 'create' ?>">
@@ -286,11 +332,6 @@ foreach ($journeys as $journey) {
                 <input class="form-control" id="travel_time" name="travel_time" type="time" step="60" value="<?= htmlspecialchars($journeyForm['travel_time']) ?>" required>
             </div>
 
-            <div class="form-group">
-                <label for="place_available">Places</label>
-                <input class="form-control" id="place_available" name="place_available" type="number" min="0" value="<?= (int) $journeyForm['place_available'] ?>" required>
-            </div>
-
             <div class="journey-editor-actions">
                 <button type="submit" class="btn btn-primary"><?= $journeyForm['journey_id'] > 0 ? 'Modifier' : 'Creer' ?></button>
                 <?php if ($journeyForm['journey_id'] > 0): ?>
@@ -306,55 +347,55 @@ foreach ($journeys as $journey) {
         <div class="table-responsive">
             <table class="table table-striped table-hover">
                 <thead class="table-dark">
-                    <tr>
-                        <th>Depart</th>
-                        <th>Arrivee</th>
-                        <th>Conducteur</th>
-                        <th>Date/Heure depart</th>
-                        <th>Duree</th>
-                        <th>Places</th>
-                        <th>Actions</th>
-                    </tr>
+                <tr>
+                    <th>Depart</th>
+                    <th>Arrivee</th>
+                    <th>Conducteur</th>
+                    <th>Date/Heure depart</th>
+                    <th>Duree</th>
+                    <th>Places</th>
+                    <th>Actions</th>
+                </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($journeys as $j):
-                        $reserved = $reservationCounts[(int) $j['journeys_id']] ?? 0;
-                        $remaining = (int) $j['place_available'] - $reserved;
+                <?php foreach ($journeys as $j):
+                    $reserved = $reservationCounts[(int) $j['journeys_id']] ?? 0;
+                    $remaining = (int) $j['place_available'] - $reserved;
                     ?>
-                        <tr>
-                            <td><?= htmlspecialchars($j['start']) ?></td>
-                            <td><?= htmlspecialchars($j['final']) ?></td>
-                            <td><?= htmlspecialchars($j['conducteur_nom']) ?></td>
-                            <td><?= htmlspecialchars($j['start_of_hours']) ?></td>
-                            <td><?= htmlspecialchars(substr($j['travel_time'], 0, 5)) ?></td>
-                            <td>
+                    <tr>
+                        <td><?= htmlspecialchars($j['start']) ?></td>
+                        <td><?= htmlspecialchars($j['final']) ?></td>
+                        <td><?= htmlspecialchars($j['conducteur_nom']) ?></td>
+                        <td><?= date('d/m/Y H:i', strtotime($j['start_of_hours'])) ?></td>
+                        <td><?= htmlspecialchars(substr($j['travel_time'], 0, 5)) ?> h</td>
+                        <td>
                                 <span class="badge <?= $remaining > 0 ? 'bg-success' : 'bg-danger' ?>">
                                     <?= $remaining ?> / <?= (int) $j['place_available'] ?>
                                 </span>
-                            </td>
-                            <td>
-                                <div class="journey-action-stack">
-                                    <?php if ($remaining > 0): ?>
-                                        <form method="POST" class="inline-form">
-                                            <input type="hidden" name="action" value="reserve">
-                                            <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
-                                            <button type="submit" class="btn btn-primary btn-sm">Reserver</button>
-                                        </form>
-                                    <?php else: ?>
-                                        <button class="btn btn-secondary btn-sm" disabled>Complet</button>
-                                    <?php endif; ?>
-
-                                    <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation&edit=<?= (int) $j['journeys_id'] ?>">Modifier</a>
-
-                                    <form method="POST" class="inline-form" onsubmit="return confirm('Supprimer ce trajet ?');">
-                                        <input type="hidden" name="action" value="delete">
+                        </td>
+                        <td>
+                            <div class="journey-action-stack">
+                                <?php if ($remaining > 0): ?>
+                                    <form method="POST" class="inline-form">
+                                        <input type="hidden" name="action" value="reserve">
                                         <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
-                                        <button type="submit" class="btn btn-outline-danger btn-sm">Supprimer</button>
+                                        <button type="submit" class="btn btn-primary btn-sm">Reserver</button>
                                     </form>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <button class="btn btn-secondary btn-sm" disabled>Complet</button>
+                                <?php endif; ?>
+
+                                <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation&edit=<?= (int) $j['journeys_id'] ?>">Modifier</a>
+
+                                <form method="POST" class="inline-form" onsubmit="return confirm('Supprimer ce trajet ?');">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Supprimer</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
