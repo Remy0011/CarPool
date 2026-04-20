@@ -715,6 +715,52 @@ button[type="submit"]:hover {
     gap: 0.45rem;
 }
 
+.reservation-confirm-wrap {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.reservation-confirm-card {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 980px);
+    max-width: 980px;
+    max-height: calc(100vh - 3rem);
+    overflow: auto;
+}
+
+.reservation-confirm-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 9, 62, 0.55);
+    backdrop-filter: blur(6px);
+}
+
+.reservation-confirm-avatar {
+    margin-left: 0;
+    background: rgba(76, 75, 93, 0.12);
+}
+
+.reservation-shell-has-overlay > :not(.reservation-confirm-wrap) {
+    filter: blur(1.5px);
+}
+
+.reservation-confirm-delete {
+    border-color: #b42318;
+    color: #b42318;
+}
+
+.reservation-confirm-delete:hover {
+    background: #b42318;
+    border-color: #b42318;
+    color: #fff;
+}
+
 .table-responsive {
     background: var(--surface);
     border: 1px solid rgba(17, 9, 62, 0.08);
@@ -1182,6 +1228,16 @@ footer {
 
     .journey-editor-actions .btn {
         width: 100%;
+    }
+
+    .reservation-confirm-wrap {
+        padding: 1rem;
+        align-items: flex-start;
+    }
+
+    .reservation-confirm-card {
+        margin-top: 1rem;
+        max-height: calc(100vh - 2rem);
     }
 
     .navbar {

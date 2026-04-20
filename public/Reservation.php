@@ -4,6 +4,7 @@ $pdo = getDB();
 $message = '';
 $messageType = '';
 $editJourneyId = isset($_GET['edit']) ? (int) $_GET['edit'] : 0;
+$confirmDeleteJourneyId = isset($_GET['confirm_delete']) ? (int) $_GET['confirm_delete'] : 0;
 
 function findPassengerId(PDO $pdo, string $email): ?int
 {
@@ -272,9 +273,17 @@ foreach ($journeys as $journey) {
         break;
     }
 }
+
+$journeyPendingDelete = null;
+foreach ($journeys as $journey) {
+    if ((int) $journey['journeys_id'] === $confirmDeleteJourneyId) {
+        $journeyPendingDelete = $journey;
+        break;
+    }
+}
 ?>
 
-<main class="container reservation-shell">
+<main class="container reservation-shell<?= $journeyPendingDelete ? ' reservation-shell-has-overlay' : '' ?>">
     <div class="reservation-header">
         <div>
             <h2 class="mb-2">Reservation de trajets</h2>
@@ -341,6 +350,58 @@ foreach ($journeys as $journey) {
         </form>
     </section>
 
+    <?php if ($journeyPendingDelete): ?>
+        <section class="reservation-confirm-wrap" aria-modal="true" role="dialog">
+            <a class="reservation-confirm-backdrop" href="index.php?page=Reservation" aria-label="Fermer la confirmation"></a>
+            <article class="welcome-card journey-welcome-card reservation-confirm-card">
+                <div class="welcome-avatar journey-avatar reservation-confirm-avatar">!</div>
+                <div class="journey-summary-top">
+                    <div>
+                        <h3 class="journey-card-title mb-1">Supprimer ce trajet ?</h3>
+                        <p class="journey-card-subtitle mb-0">Cette action retirera definitivement le trajet de la liste des reservations.</p>
+                    </div>
+                    <span class="journey-availability is-full">Suppression</span>
+                </div>
+
+                <div class="journey-form-grid">
+                    <div class="journey-field">
+                        <label>Depart</label>
+                        <div class="journey-field-box"><?= htmlspecialchars($journeyPendingDelete['start']) ?></div>
+                    </div>
+                    <div class="journey-field">
+                        <label>Arrivee</label>
+                        <div class="journey-field-box"><?= htmlspecialchars($journeyPendingDelete['final']) ?></div>
+                    </div>
+                    <div class="journey-field">
+                        <label>Conducteur</label>
+                        <div class="journey-field-box"><?= htmlspecialchars($journeyPendingDelete['conducteur_nom']) ?></div>
+                    </div>
+                    <div class="journey-field">
+                        <label>Date/Heure depart</label>
+                        <div class="journey-field-box"><?= date('d/m/Y H:i', strtotime($journeyPendingDelete['start_of_hours'])) ?></div>
+                    </div>
+                    <div class="journey-field">
+                        <label>Duree</label>
+                        <div class="journey-field-box"><?= htmlspecialchars(substr((string) $journeyPendingDelete['travel_time'], 0, 5)) ?> h</div>
+                    </div>
+                    <div class="journey-field">
+                        <label>Places</label>
+                        <div class="journey-field-box"><?= (int) $journeyPendingDelete['place_available'] ?></div>
+                    </div>
+                </div>
+
+                <div class="journey-summary-actions">
+                    <form method="POST" class="inline-form">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="journey_id" value="<?= (int) $journeyPendingDelete['journeys_id'] ?>">
+                        <button type="submit" class="btn btn-outline-danger btn-sm reservation-confirm-delete">Confirmer la suppression</button>
+                    </form>
+                    <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation">Annuler</a>
+                </div>
+            </article>
+        </section>
+    <?php endif; ?>
+
     <?php if (empty($journeys)): ?>
         <div class="alert alert-info">Aucun trajet disponible pour le moment.</div>
     <?php else: ?>
@@ -387,11 +448,7 @@ foreach ($journeys as $journey) {
 
                                 <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation&edit=<?= (int) $j['journeys_id'] ?>">Modifier</a>
 
-                                <form method="POST" class="inline-form" onsubmit="return confirm('Supprimer ce trajet ?');">
-                                    <input type="hidden" name="action" value="delete">
-                                    <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
-                                    <button type="submit" class="btn btn-outline-danger btn-sm">Supprimer</button>
-                                </form>
+                                <a class="btn btn-outline-danger btn-sm" href="index.php?page=Reservation&confirm_delete=<?= (int) $j['journeys_id'] ?>">Supprimer</a>
                             </div>
                         </td>
                     </tr>
