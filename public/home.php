@@ -31,7 +31,7 @@ $journeyTotal = count($journeys);
 
 <main class="container home-shell">
     <section class="home-hero">
-        <div class="welcome-card text-center">
+        <div class="welcome-card home-main-welcome text-center">
             <div class="welcome-avatar">
                 <?= $initiale ?>
             </div>

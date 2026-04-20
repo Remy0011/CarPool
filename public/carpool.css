@@ -473,6 +473,10 @@ button[type="submit"]:hover {
     margin-bottom: 1.75rem;
 }
 
+.home-main-welcome {
+    width: min(100%, 720px);
+}
+
 .home-journeys {
     display: flex;
     flex-direction: column;
