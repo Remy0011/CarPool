@@ -62,7 +62,8 @@ $journeyTotal = count($journeys);
             <div class="journey-card-grid">
                 <?php foreach ($journeys as $index => $journey):
                     $reserved = $reservationCounts[(int) $journey['journeys_id']] ?? 0;
-                    $remaining = max(0, (int) $journey['place_available'] - $reserved);
+                    $remaining = max(0, (int) $journey['place_available']);
+                    $totalPlaces = $remaining + $reserved;
                     $cardNumber = str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT);
                     $journeyInitial = mb_strtoupper(mb_substr($journey['start'], 0, 1));
                     ?>
@@ -102,8 +103,8 @@ $journeyTotal = count($journeys);
                                 <div class="journey-field-box"><?= htmlspecialchars(substr((string) $journey['travel_time'], 0, 5)) ?> h</div>
                             </div>
                             <div class="journey-field">
-                                <label>Reservations</label>
-                                <div class="journey-field-box"><?= $reserved ?> / <?= (int) $journey['place_available'] ?></div>
+                                <label>Places</label>
+                                <div class="journey-field-box"><?= $remaining ?> / <?= $totalPlaces ?></div>
                             </div>
                         </div>
 

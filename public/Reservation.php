@@ -302,7 +302,7 @@ foreach ($journeys as $journey) {
     <section class="journey-editor-card">
         <div class="journey-editor-head">
             <h3 class="mb-1"><?= $journeyForm['journey_id'] > 0 ? 'Modifier un trajet' : 'Creer un trajet' ?></h3>
-            <p class="mb-0">Renseignez Depart, Arrivee, Conducteur, Date/Heure depart et Duree. Les places seront automatiquement gerees (max 4).</p>
+            <p class="mb-0">Renseignez Depart, Arrivee, Conducteur, Date/Heure depart et Duree. Les places seront automatiquement gerees (max 5).</p>
         </div>
         <form method="POST" class="journey-editor-grid">
             <input type="hidden" name="action" value="<?= $journeyForm['journey_id'] > 0 ? 'update' : 'create' ?>">
@@ -386,7 +386,12 @@ foreach ($journeys as $journey) {
                     </div>
                     <div class="journey-field">
                         <label>Places</label>
-                        <div class="journey-field-box"><?= (int) $journeyPendingDelete['place_available'] ?></div>
+                        <?php
+                        $pendingReserved = $reservationCounts[(int) $journeyPendingDelete['journeys_id']] ?? 0;
+                        $pendingRemaining = max(0, (int) $journeyPendingDelete['place_available']);
+                        $pendingTotalPlaces = $pendingRemaining + $pendingReserved;
+                        ?>
+                        <div class="journey-field-box"><?= $pendingRemaining ?> / <?= $pendingTotalPlaces ?></div>
                     </div>
                 </div>
 
@@ -421,7 +426,8 @@ foreach ($journeys as $journey) {
                 <tbody>
                 <?php foreach ($journeys as $j):
                     $reserved = $reservationCounts[(int) $j['journeys_id']] ?? 0;
-                    $remaining = (int) $j['place_available'] - $reserved;
+                    $remaining = max(0, (int) $j['place_available']);
+                    $totalPlaces = $remaining + $reserved;
                     ?>
                     <tr>
                         <td><?= htmlspecialchars($j['start']) ?></td>
@@ -431,7 +437,7 @@ foreach ($journeys as $journey) {
                         <td><?= htmlspecialchars(substr($j['travel_time'], 0, 5)) ?> h</td>
                         <td>
                                 <span class="badge <?= $remaining > 0 ? 'bg-success' : 'bg-danger' ?>">
-                                    <?= $remaining ?> / <?= (int) $j['place_available'] ?>
+                                    <?= $remaining ?> / <?= $totalPlaces ?>
                                 </span>
                         </td>
                         <td>
