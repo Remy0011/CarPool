@@ -421,6 +421,8 @@ button[type="submit"]:hover {
 
 .home-shell {
     min-height: calc(100vh - 180px);
+    padding-top: 2rem;
+    padding-bottom: 2rem;
 }
 
 .welcome-card {
@@ -463,6 +465,176 @@ button[type="submit"]:hover {
     background: var(--surface-soft);
     border: 1px solid var(--line);
     text-align: left;
+}
+
+.home-hero {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1.75rem;
+}
+
+.home-journeys {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.home-section-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0 0.15rem;
+}
+
+.journey-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+.journey-welcome-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.journey-avatar {
+    margin-bottom: 0.25rem;
+}
+
+.journey-welcome-card .journey-summary-top {
+    align-items: center;
+}
+
+.journey-welcome-card .journey-card-title {
+    font-size: 1.5rem;
+    letter-spacing: -0.03em;
+}
+
+.journey-welcome-card .journey-card-subtitle {
+    font-size: 0.95rem;
+}
+
+.journey-welcome-card .journey-form-grid {
+    gap: 0.85rem;
+}
+
+.journey-welcome-card .journey-summary-actions {
+    margin-top: 0.25rem;
+}
+
+.journey-welcome-card:hover {
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    transform: translateY(-4px);
+    border-color: rgba(255, 95, 46, 0.18);
+    box-shadow: 0 24px 54px rgba(17, 9, 62, 0.1);
+}
+
+.journey-summary-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.journey-card-title {
+    color: var(--brand-dark);
+    font-size: clamp(1.8rem, 3vw, 2.35rem);
+    font-weight: 800;
+    letter-spacing: -0.05em;
+}
+
+.journey-card-subtitle {
+    max-width: 760px;
+    color: #55596e;
+    font-size: 1rem;
+    line-height: 1.55;
+}
+
+.journey-availability {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.journey-availability.is-open {
+    background: rgba(255, 95, 46, 0.12);
+    color: var(--brand);
+}
+
+.journey-availability.is-full {
+    background: rgba(76, 75, 93, 0.12);
+    color: #4c4b5d;
+}
+
+.journey-form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem 1.35rem;
+}
+
+.journey-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.journey-field label {
+    color: var(--brand-dark);
+    font-size: 0.98rem;
+    font-weight: 800;
+}
+
+.journey-field-box {
+    display: flex;
+    align-items: center;
+    min-height: 76px;
+    padding: 1rem 1.25rem;
+    border-radius: 20px;
+    border: 1px solid rgba(207, 221, 236, 0.95);
+    background: rgba(255, 255, 255, 0.98);
+    color: var(--brand-dark);
+    font-size: 1.12rem;
+    font-weight: 500;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.journey-summary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-top: auto;
+}
+
+.journey-summary-actions .btn {
+    min-height: 46px;
+    padding-left: 1.15rem;
+    padding-right: 1.15rem;
+    border-radius: 18px;
+}
+
+.journey-summary-actions .btn-primary {
+    background: var(--brand);
+    border-color: var(--brand);
+}
+
+.journey-summary-actions .btn:hover {
+    background: #e95426;
+    border-color: #e95426;
+}
+
+.journey-map-link {
+    border-radius: 18px;
 }
 
 .reservation-shell {
@@ -887,6 +1059,10 @@ footer {
         grid-template-columns: 1fr;
     }
 
+    .journey-form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .brand-logo {
         width: 38px;
         height: 38px;
@@ -967,6 +1143,20 @@ footer {
         flex-direction: column;
     }
 
+    .home-shell {
+        padding-top: 1.25rem;
+        padding-bottom: 1.25rem;
+    }
+
+    .home-section-head {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .journey-card-grid {
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
     .reservation-reset {
         width: 100%;
     }
@@ -1045,6 +1235,31 @@ footer {
 
     .map-metrics {
         grid-template-columns: 1fr;
+    }
+
+    .journey-summary-card {
+        padding: 1.25rem;
+        border-radius: 22px;
+    }
+
+    .journey-summary-top {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .journey-form-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .journey-field-box {
+        min-height: 64px;
+        font-size: 1rem;
+    }
+
+    .journey-summary-actions .btn {
+        width: 100%;
+        flex: 1 1 100%;
     }
 
     .journey-action-stack {
