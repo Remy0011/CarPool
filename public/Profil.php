@@ -39,17 +39,19 @@ if (!empty($profile['passengers_id'])) {
     $reservedJourneys = (int) $reservedJourneysStmt->fetchColumn();
 }
 
-$recentJourneysStmt = $pdo->prepare('
-    SELECT j.start, j.final, j.start_of_hours, j.end_of_hours, j.travel_time
-    FROM journeys j
-    JOIN CONDUIRE cd ON cd.journeys_id = j.journeys_id
-    JOIN conductors c ON c.conductors_id = cd.conductors_id
-    WHERE c.users_id = ?
-    ORDER BY j.start_of_hours ASC
-    LIMIT 5
-');
-$recentJourneysStmt->execute([$profile['users_id']]);
-$recentJourneys = $recentJourneysStmt->fetchAll(PDO::FETCH_ASSOC);
+$recentJourneys = [];
+if (!empty($profile['passengers_id'])) {
+    $recentJourneysStmt = $pdo->prepare('
+        SELECT j.start, j.final, j.start_of_hours, j.end_of_hours, j.travel_time
+        FROM journeys j
+        JOIN ASSO4 a ON a.journeys_id = j.journeys_id
+        WHERE a.passengers_id = ?
+        ORDER BY j.start_of_hours DESC
+        LIMIT 5
+    ');
+    $recentJourneysStmt->execute([$profile['passengers_id']]);
+    $recentJourneys = $recentJourneysStmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $initial = mb_strtoupper(mb_substr($profile['user_name'], 0, 1));
 $roles = [];
@@ -100,7 +102,7 @@ if ($roles === []) {
 
         <div class="col-12 col-lg-8">
             <div class="row g-4 mb-4">
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <div class="card shadow-sm border-0 h-100">
                         <div class="card-body">
                             <p class="text-muted mb-2">Trajets crees</p>
@@ -109,20 +111,11 @@ if ($roles === []) {
                     </div>
                 </div>
 
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <div class="card shadow-sm border-0 h-100">
                         <div class="card-body">
                             <p class="text-muted mb-2">Reservations</p>
                             <p class="display-6 mb-0"><?= $reservedJourneys ?></p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-body">
-                            <p class="text-muted mb-2">Statut conducteur</p>
-                            <p class="display-6 mb-0"><?= !empty($profile['conductors_id']) ? 'Oui' : 'Non' ?></p>
                         </div>
                     </div>
                 </div>
@@ -136,7 +129,7 @@ if ($roles === []) {
                     </div>
 
                     <?php if (empty($recentJourneys)): ?>
-                        <div class="alert alert-light border mb-0">Aucun trajet conducteur trouve pour ce profil.</div>
+                        <div class="alert alert-light border mb-0">Aucune reservation recente trouvee pour ce profil.</div>
                     <?php else: ?>
                         <div class="table-responsive">
                             <table class="table align-middle mb-0">
