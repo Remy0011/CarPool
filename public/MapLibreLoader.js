@@ -57,7 +57,6 @@
         mode: 'simulation',
         currentJourney: null,
         carMarker: null,
-        lastBearing: 0,
     };
 
     async function ensureMapLibreAssets() {
@@ -231,14 +230,12 @@
     }
 
     function setCarPosition(coordinates, progress = 0, shouldFollow = true) {
-        const previousCoordinates = pointGeoJson.geometry.coordinates;
         pointGeoJson.geometry.coordinates = coordinates;
         state.map.getSource('car-point').setData(pointGeoJson);
 
         if (state.carMarker) {
-            state.lastBearing = computeBearing(previousCoordinates, coordinates);
             state.carMarker.setLngLat(coordinates);
-            state.carMarker.setRotation(state.lastBearing);
+            state.carMarker.setRotation(0);
         }
 
         setProgress(progress);
@@ -257,17 +254,6 @@
         if (state.map && state.map.getSource('live-track')) {
             state.map.getSource('live-track').setData(liveTrackGeoJson);
         }
-    }
-
-    function computeBearing(from, to) {
-        const deltaLng = to[0] - from[0];
-        const deltaLat = to[1] - from[1];
-
-        if (deltaLng === 0 && deltaLat === 0) {
-            return state.lastBearing;
-        }
-
-        return Math.atan2(deltaLng, deltaLat) * 180 / Math.PI;
     }
 
     function resetRoutePosition() {
@@ -513,7 +499,6 @@
         state.map.getSource('car-point').setData(pointGeoJson);
         state.map.getSource('live-track').setData(liveTrackGeoJson);
         if (state.carMarker) {
-            state.lastBearing = 0;
             state.carMarker.setLngLat(pointGeoJson.geometry.coordinates);
             state.carMarker.setRotation(0);
         }
