@@ -103,7 +103,7 @@ $journeyTotal = count($journeys);
                                 <div class="journey-field-box"><?= htmlspecialchars(substr((string) $journey['travel_time'], 0, 5)) ?> h</div>
                             </div>
                             <div class="journey-field">
-                                <label>Places</label>
+                                <label>Places disponibles</label>
                                 <div class="journey-field-box"><?= $remaining ?> / <?= $totalPlaces ?></div>
                             </div>
                         </div>

@@ -302,7 +302,7 @@ foreach ($journeys as $journey) {
     <section class="journey-editor-card">
         <div class="journey-editor-head">
             <h3 class="mb-1"><?= $journeyForm['journey_id'] > 0 ? 'Modifier un trajet' : 'Creer un trajet' ?></h3>
-            <p class="mb-0">Renseignez Depart, Arrivee, Conducteur, Date/Heure depart et Duree. Les places seront automatiquement gerees (max 5).</p>
+            <p class="mb-0">Renseignez Depart, Arrivee, Conducteur, Date/Heure depart et Duree. Les places disponibles seront automatiquement gerees (max 5).</p>
         </div>
         <form method="POST" class="journey-editor-grid">
             <input type="hidden" name="action" value="<?= $journeyForm['journey_id'] > 0 ? 'update' : 'create' ?>">
@@ -419,7 +419,7 @@ foreach ($journeys as $journey) {
                     <th>Conducteur</th>
                     <th>Date/Heure depart</th>
                     <th>Duree</th>
-                    <th>Places</th>
+                    <th>Places disponibles</th>
                     <th>Actions</th>
                 </tr>
                 </thead>
@@ -442,16 +442,6 @@ foreach ($journeys as $journey) {
                         </td>
                         <td>
                             <div class="journey-action-stack">
-                                <?php if ($remaining > 0): ?>
-                                    <form method="POST" class="inline-form">
-                                        <input type="hidden" name="action" value="reserve">
-                                        <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
-                                        <button type="submit" class="btn btn-primary btn-sm">Reserver</button>
-                                    </form>
-                                <?php else: ?>
-                                    <button class="btn btn-secondary btn-sm" disabled>Complet</button>
-                                <?php endif; ?>
-
                                 <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation&edit=<?= (int) $j['journeys_id'] ?>">Modifier</a>
 
                                 <a class="btn btn-outline-danger btn-sm" href="index.php?page=Reservation&confirm_delete=<?= (int) $j['journeys_id'] ?>">Supprimer</a>
