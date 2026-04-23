@@ -82,6 +82,11 @@ function buildJourneyPayload(array $input): array
     }
 
     $now = new DateTime('now');
+    if ((int) $now->format('s') > 0) {
+        $now->modify('+1 minute');
+    }
+    $now->setTime((int) $now->format('H'), (int) $now->format('i'), 0);
+
     if ($startDate < $now) {
         throw new InvalidArgumentException('La date et l heure de depart doivent etre dans le futur.');
     }
@@ -409,7 +414,7 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
 
                 <div class="form-group">
                     <label for="start_of_hours">Date/Heure depart</label>
-                    <input class="form-control" id="start_of_hours" name="start_of_hours" type="datetime-local" value="<?= htmlspecialchars($journeyForm['start_of_hours']) ?>" min="<?= date('Y-m-d\TH:i') ?>" required>
+                    <input class="form-control" id="start_of_hours" name="start_of_hours" type="datetime-local" step="60" value="<?= htmlspecialchars($journeyForm['start_of_hours']) ?>" required>
                 </div>
 
                 <div class="form-group">
@@ -554,6 +559,7 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
 </main>
 <script>
 (() => {
+    const journeyForm = document.querySelector('.journey-editor-grid');
     const startField = document.getElementById('start');
     const finalField = document.getElementById('final');
     const startOfHoursField = document.getElementById('start_of_hours');
@@ -562,16 +568,41 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
     const durationField = document.getElementById('travel_time');
     const submitButton = document.getElementById('journey-submit');
 
-    if (!startField || !finalField || !startOfHoursField || !distanceField || !durationDisplayField || !durationField) {
+    if (!journeyForm || !startField || !finalField || !startOfHoursField || !distanceField || !durationDisplayField || !durationField) {
         return;
     }
 
     let debounceTimer = null;
 
+    function pad(value) {
+        return String(value).padStart(2, '0');
+    }
+
+    function formatLocalDateTime(date) {
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
     function getCurrentLocalDateTime() {
         const now = new Date();
-        const offset = now.getTimezoneOffset();
-        return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 16);
+        const seconds = now.getSeconds();
+        const milliseconds = now.getMilliseconds();
+        now.setSeconds(0, 0);
+
+        if (seconds > 0 || milliseconds > 0) {
+            now.setMinutes(now.getMinutes() + 1);
+        }
+
+        return formatLocalDateTime(now);
+    }
+
+    function validateDepartureDateTime() {
+        const minDateTime = getCurrentLocalDateTime();
+        startOfHoursField.min = minDateTime;
+
+        const isPast = startOfHoursField.value && startOfHoursField.value < minDateTime;
+        startOfHoursField.setCustomValidity(isPast ? 'Choisissez une date et une heure futures.' : '');
+
+        return !isPast;
     }
 
     function syncMinDateTime() {
@@ -581,6 +612,8 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
         if (startOfHoursField.value && startOfHoursField.value < minDateTime) {
             startOfHoursField.value = minDateTime;
         }
+
+        validateDepartureDateTime();
     }
 
     function setPendingState(message) {
@@ -713,6 +746,13 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
     finalField.addEventListener('input', queueCalculation);
     startOfHoursField.addEventListener('focus', syncMinDateTime);
     startOfHoursField.addEventListener('input', syncMinDateTime);
+    startOfHoursField.addEventListener('change', validateDepartureDateTime);
+    journeyForm.addEventListener('submit', (event) => {
+        if (!validateDepartureDateTime()) {
+            event.preventDefault();
+            startOfHoursField.reportValidity();
+        }
+    });
 
     syncMinDateTime();
     window.setInterval(syncMinDateTime, 30000);
