@@ -30,6 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     try {
+        verifyCsrfToken($_POST['csrf_token'] ?? null);
+
         if ($action === 'update_account') {
             $userName = trim($_POST['user_name'] ?? '');
             $userEmail = trim($_POST['user_email'] ?? '');
@@ -85,6 +87,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $userStmt->execute([$_SESSION['user_email']]);
         $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('Settings error: ' . $e->getMessage());
+        $errorMessage = 'Une erreur technique est survenue. Reessayez plus tard.';
     } catch (Throwable $e) {
         $errorMessage = $e->getMessage();
     }
@@ -148,6 +153,7 @@ if ($roleLabels === []) {
                 <div class="card-body">
                     <h2 class="h5 mb-3">Modifier les informations</h2>
                     <form method="post" class="row g-3">
+                        <?= csrfInput() ?>
                         <input type="hidden" name="action" value="update_account">
 
                         <div class="col-md-6">
@@ -185,6 +191,7 @@ if ($roleLabels === []) {
                 <div class="card-body">
                     <h2 class="h5 mb-3">Changer le mot de passe</h2>
                     <form method="post" class="row g-3">
+                        <?= csrfInput() ?>
                         <input type="hidden" name="action" value="update_password">
 
                         <div class="col-12">

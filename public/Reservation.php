@@ -105,6 +105,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $currentPassengerRole = findPassengerId($pdo, $_SESSION['user_email']);
 
     try {
+        verifyCsrfToken($_POST['csrf_token'] ?? null);
+
         if ($action === 'reserve' && isset($_POST['journey_id'])) {
             $journeyId = (int) $_POST['journey_id'];
             $passengerId = $currentPassengerRole;
@@ -261,11 +263,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (InvalidArgumentException $e) {
         $message = $e->getMessage();
         $messageType = 'warning';
+    } catch (RuntimeException $e) {
+        $message = $e->getMessage();
+        $messageType = 'danger';
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        $message = 'Erreur lors du traitement : ' . htmlspecialchars($e->getMessage());
+        error_log('Reservation error: ' . $e->getMessage());
+        $message = 'Une erreur technique est survenue. Reessayez plus tard.';
         $messageType = 'danger';
     }
 }
@@ -370,6 +376,7 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
                 <p class="mb-0">Renseignez Depart, Arrivee et Date/Heure depart. La distance en miles et la duree sont calculees automatiquement.</p>
             </div>
             <form method="POST" class="journey-editor-grid">
+                <?= csrfInput() ?>
                 <input type="hidden" name="action" value="<?= $journeyForm['journey_id'] > 0 ? 'update' : 'create' ?>">
                 <?php if ($journeyForm['journey_id'] > 0): ?>
                     <input type="hidden" name="journey_id" value="<?= $journeyForm['journey_id'] ?>">
@@ -467,6 +474,7 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
 
                 <div class="journey-summary-actions">
                     <form method="POST" class="inline-form">
+                        <?= csrfInput() ?>
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="journey_id" value="<?= (int) $journeyPendingDelete['journeys_id'] ?>">
                         <button type="submit" class="btn btn-outline-danger btn-sm reservation-confirm-delete">Confirmer la suppression</button>
@@ -522,6 +530,7 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
                         <td>
                             <div class="journey-action-stack">
                                 <form method="POST" class="inline-form">
+                                    <?= csrfInput() ?>
                                     <input type="hidden" name="action" value="<?= $isReservedByMe ? 'cancel' : 'reserve' ?>">
                                     <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
                                     <button type="submit" class="btn btn-sm <?= $isReservedByMe ? 'btn-warning' : 'btn-success' ?>">

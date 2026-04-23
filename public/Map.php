@@ -103,6 +103,6 @@ $journeyOptions = array_map(
 </main>
 
 <script>
-window.CARPOOL_JOURNEYS = <?= json_encode($journeyOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+window.CARPOOL_JOURNEYS = <?= json_encode($journeyOptions, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 </script>
 <script src="/MapLibreLoader.js"></script>

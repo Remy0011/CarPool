@@ -43,7 +43,10 @@ $userName = htmlspecialchars($_SESSION['user_name'] ?? 'Utilisateur');
             </ul>
             <div class="d-flex align-items-center gap-3">
                 <span class="navbar-text text-white-50"><?= $userName ?></span>
-                <a class="btn btn-outline-light btn-sm" href="deconnexion.php">Deconnexion</a>
+                <form method="post" action="deconnexion.php" class="mb-0">
+                    <?= csrfInput() ?>
+                    <button type="submit" class="btn btn-outline-light btn-sm">Deconnexion</button>
+                </form>
             </div>
         </div>
     </div>

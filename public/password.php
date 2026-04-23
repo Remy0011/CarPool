@@ -1,3 +1,5 @@
 <?php
-echo password_hash('test123', PASSWORD_DEFAULT);
-?>
+require_once __DIR__ . '/config.php';
+applySecurityHeaders();
+http_response_code(404);
+exit('Not Found');

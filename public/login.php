@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once 'config.php';
+applySecurityHeaders();
 
 $error = '';
 
@@ -8,9 +9,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if ($email === '' || $password === '') {
+    try {
+        verifyCsrfToken($_POST['csrf_token'] ?? null);
+    } catch (RuntimeException $e) {
+        $error = 'Requete invalide. Rechargez la page et recommencez.';
+    }
+
+    if ($error === '' && ($email === '' || $password === '')) {
         $error = 'Veuillez remplir les deux champs.';
-    } else {
+    } elseif ($error === '') {
         try {
             $pdo = getDB();
             $stmt = $pdo->prepare('SELECT users_id, user_name, user_email, user_password FROM users WHERE user_email = ? LIMIT 1');
@@ -19,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = $stmt->fetch();
 
             if ($user && password_verify($password, $user['user_password'])) {
+                session_regenerate_id(true);
                 $_SESSION['user_name'] = $user['user_name'];
                 $_SESSION['user_email'] = $user['user_email'];
                 $_SESSION['show_loading_screen'] = true;
@@ -28,7 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'Email ou mot de passe invalide.';
             }
         } catch (PDOException $e) {
-            $error = $e->getMessage();
+            error_log('Login error: ' . $e->getMessage());
+            $error = 'Une erreur technique est survenue. Reessayez plus tard.';
         }
     }
 }
@@ -60,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <form method="POST" action="login.php" novalidate>
+        <?= csrfInput() ?>
         <div class="form-group">
             <label for="email">Adresse email</label>
             <input type="email" id="email" name="email"
