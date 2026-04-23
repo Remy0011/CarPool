@@ -34,6 +34,31 @@ function findConductorId(PDO $pdo, string $email): ?int
     return $conductor ? (int) $conductor['conductors_id'] : null;
 }
 
+function findUserId(PDO $pdo, string $email): ?int
+{
+    $stmt = $pdo->prepare('SELECT users_id FROM users WHERE user_email = ? LIMIT 1');
+    $stmt->execute([$email]);
+    $userId = $stmt->fetchColumn();
+
+    return $userId !== false ? (int) $userId : null;
+}
+
+function ensurePassengerRole(PDO $pdo, int $userId): int
+{
+    $stmt = $pdo->prepare('SELECT passengers_id FROM passengers WHERE users_id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    $passengerId = $stmt->fetchColumn();
+
+    if ($passengerId !== false) {
+        return (int) $passengerId;
+    }
+
+    $insert = $pdo->prepare('INSERT INTO passengers (users_id) VALUES (?)');
+    $insert->execute([$userId]);
+
+    return (int) $pdo->lastInsertId();
+}
+
 function buildJourneyPayload(array $input): array
 {
     $startLocation = trim($input['start'] ?? '');
@@ -76,7 +101,7 @@ function buildJourneyPayload(array $input): array
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'reserve';
-    $currentConductorRole = findConductorId($pdo, $_SESSION['user_email']);
+    $currentUserId = findUserId($pdo, $_SESSION['user_email']);
     $currentPassengerRole = findPassengerId($pdo, $_SESSION['user_email']);
 
     try {
@@ -84,13 +109,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $journeyId = (int) $_POST['journey_id'];
             $passengerId = $currentPassengerRole;
 
-            if ($currentConductorRole !== null) {
-                $message = 'Un conducteur ne peut pas reserver comme passager.';
-                $messageType = 'warning';
-            } elseif ($passengerId === null) {
-                $message = 'Vous n\'etes pas enregistre comme passager.';
+            if ($currentUserId === null) {
+                $message = 'Utilisateur introuvable.';
                 $messageType = 'warning';
             } else {
+                if ($passengerId === null) {
+                    $passengerId = ensurePassengerRole($pdo, $currentUserId);
+                }
+
                 $check = $pdo->prepare('SELECT 1 FROM ASSO4 WHERE passengers_id = ? AND journeys_id = ?');
                 $check->execute([$passengerId, $journeyId]);
 
@@ -136,10 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $journeyId = (int) $_POST['journey_id'];
             $passengerId = $currentPassengerRole;
 
-            if ($currentConductorRole !== null) {
-                $message = 'Un conducteur ne peut pas annuler une reservation passager.';
-                $messageType = 'warning';
-            } elseif ($passengerId === null) {
+            if ($passengerId === null) {
                 $message = 'Vous n\'etes pas enregistre comme passager.';
                 $messageType = 'warning';
             } else {
@@ -169,11 +192,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } elseif ($action === 'create') {
-            if ($currentConductorRole === null) {
-                throw new InvalidArgumentException('Seuls les conducteurs peuvent creer un trajet.');
-            }
-
-            $_POST['conductors_id'] = (string) $currentConductorRole;
             $payload = buildJourneyPayload($_POST);
 
             $pdo->beginTransaction();
@@ -205,18 +223,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'success';
         } elseif ($action === 'update' && isset($_POST['journey_id'])) {
             $journeyId = (int) $_POST['journey_id'];
-            if ($currentConductorRole === null) {
-                throw new InvalidArgumentException('Seuls les conducteurs peuvent modifier un trajet.');
-            }
-
-            $ownershipStmt = $pdo->prepare('SELECT conductors_id FROM CONDUIRE WHERE journeys_id = ?');
-            $ownershipStmt->execute([$journeyId]);
-            $ownerConductorId = (int) $ownershipStmt->fetchColumn();
-            if ($ownerConductorId !== $currentConductorRole) {
-                throw new InvalidArgumentException('Vous ne pouvez modifier que vos propres trajets.');
-            }
-
-            $_POST['conductors_id'] = (string) $currentConductorRole;
             $payload = buildJourneyPayload($_POST);
 
             $pdo->beginTransaction();
@@ -245,17 +251,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $editJourneyId = 0;
         } elseif ($action === 'delete' && isset($_POST['journey_id'])) {
             $journeyId = (int) $_POST['journey_id'];
-            if ($currentConductorRole === null) {
-                throw new InvalidArgumentException('Seuls les conducteurs peuvent supprimer un trajet.');
-            }
-
-            $ownershipStmt = $pdo->prepare('SELECT conductors_id FROM CONDUIRE WHERE journeys_id = ?');
-            $ownershipStmt->execute([$journeyId]);
-            $ownerConductorId = (int) $ownershipStmt->fetchColumn();
-            if ($ownerConductorId !== $currentConductorRole) {
-                throw new InvalidArgumentException('Vous ne pouvez supprimer que vos propres trajets.');
-            }
-
             $deleteJourney = $pdo->prepare('DELETE FROM journeys WHERE journeys_id = ?');
             $deleteJourney->execute([$journeyId]);
 
@@ -346,6 +341,8 @@ foreach ($journeys as $journey) {
         break;
     }
 }
+
+$showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) && $_GET['show_form'] === '1');
 ?>
 
 <main class="container reservation-shell<?= $journeyPendingDelete ? ' reservation-shell-has-overlay' : '' ?>">
@@ -354,7 +351,7 @@ foreach ($journeys as $journey) {
             <h2 class="mb-2">Reservation de trajets</h2>
             <p class="reservation-subtitle mb-0">Creez, modifiez, supprimez et reservez des trajets depuis le meme tableau.</p>
         </div>
-        <a class="btn btn-outline-secondary reservation-reset" href="index.php?page=Reservation">Nouveau trajet</a>
+        <a class="btn btn-outline-secondary reservation-reset" href="index.php?page=Reservation&show_form=1">Nouveau trajet</a>
     </div>
 
     <?php if ($message): ?>
@@ -364,69 +361,64 @@ foreach ($journeys as $journey) {
         </div>
     <?php endif; ?>
 
-    <?php if ($currentConductorId !== null): ?>
-        <div class="alert alert-info">Compte conducteur detecte. Vous pouvez gerer vos trajets, mais pas reserver comme passager.</div>
-    <?php elseif ($currentPassengerId !== null): ?>
-        <div class="alert alert-info">Compte passager detecte. Vous pouvez reserver ou annuler vos reservations, mais pas creer de trajet.</div>
-    <?php endif; ?>
+    <div class="alert alert-info">Tous les comptes peuvent reserver comme passager et gerer les trajets depuis cette page.</div>
 
-    <section class="journey-editor-card">
-        <div class="journey-editor-head">
-            <h3 class="mb-1"><?= $journeyForm['journey_id'] > 0 ? 'Modifier un trajet' : 'Creer un trajet' ?></h3>
-            <p class="mb-0">Renseignez Depart, Arrivee et Date/Heure depart. La distance en miles et la duree sont calculees automatiquement.</p>
-        </div>
-        <form method="POST" class="journey-editor-grid">
-            <input type="hidden" name="action" value="<?= $journeyForm['journey_id'] > 0 ? 'update' : 'create' ?>">
-            <?php if ($currentConductorId !== null): ?>
-                <input type="hidden" name="conductors_id" value="<?= (int) $currentConductorId ?>">
-            <?php endif; ?>
-            <?php if ($journeyForm['journey_id'] > 0): ?>
-                <input type="hidden" name="journey_id" value="<?= $journeyForm['journey_id'] ?>">
-            <?php endif; ?>
-
-            <div class="form-group">
-                <label for="start">Depart</label>
-                <input class="form-control" id="start" name="start" type="text" value="<?= htmlspecialchars($journeyForm['start']) ?>" required>
+    <?php if ($showJourneyForm): ?>
+        <section class="journey-editor-card">
+            <div class="journey-editor-head">
+                <h3 class="mb-1"><?= $journeyForm['journey_id'] > 0 ? 'Modifier un trajet' : 'Creer un trajet' ?></h3>
+                <p class="mb-0">Renseignez Depart, Arrivee et Date/Heure depart. La distance en miles et la duree sont calculees automatiquement.</p>
             </div>
-
-            <div class="form-group">
-                <label for="final">Arrivee</label>
-                <input class="form-control" id="final" name="final" type="text" value="<?= htmlspecialchars($journeyForm['final']) ?>" required>
-            </div>
-
-            <div class="form-group">
-                <label for="conductors_display">Conducteur</label>
-                <input class="form-control" id="conductors_display" type="text" value="<?= htmlspecialchars($_SESSION['user_name']) ?>" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="start_of_hours">Date/Heure depart</label>
-                <input class="form-control" id="start_of_hours" name="start_of_hours" type="datetime-local" value="<?= htmlspecialchars($journeyForm['start_of_hours']) ?>" required>
-            </div>
-
-            <div class="form-group">
-                <label for="distance_miles">Distance estimee</label>
-                <input class="form-control" id="distance_miles" type="text" value="" placeholder="Calculee automatiquement" readonly>
-            </div>
-
-            <div class="form-group">
-                <label for="travel_time_display">Duree estimee</label>
-                <input class="form-control" id="travel_time_display" type="text" value="<?= htmlspecialchars($journeyForm['travel_time']) ?> h" readonly>
-                <input type="hidden" id="travel_time" name="travel_time" value="<?= htmlspecialchars($journeyForm['travel_time']) ?>">
-            </div>
-
-            <div class="journey-editor-actions">
-                <?php if ($currentConductorId !== null): ?>
-                    <button type="submit" class="btn btn-primary" id="journey-submit"><?= $journeyForm['journey_id'] > 0 ? 'Modifier' : 'Creer' ?></button>
-                    <?php if ($journeyForm['journey_id'] > 0): ?>
-                        <a class="btn btn-outline-secondary" href="index.php?page=Reservation">Annuler</a>
-                    <?php endif; ?>
-                <?php else: ?>
-                    <button type="button" class="btn btn-secondary" disabled>Mode passager uniquement</button>
+            <form method="POST" class="journey-editor-grid">
+                <input type="hidden" name="action" value="<?= $journeyForm['journey_id'] > 0 ? 'update' : 'create' ?>">
+                <?php if ($journeyForm['journey_id'] > 0): ?>
+                    <input type="hidden" name="journey_id" value="<?= $journeyForm['journey_id'] ?>">
                 <?php endif; ?>
-            </div>
-        </form>
-    </section>
+
+                <div class="form-group">
+                    <label for="start">Depart</label>
+                    <input class="form-control" id="start" name="start" type="text" value="<?= htmlspecialchars($journeyForm['start']) ?>" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="final">Arrivee</label>
+                    <input class="form-control" id="final" name="final" type="text" value="<?= htmlspecialchars($journeyForm['final']) ?>" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="conductors_id">Conducteur</label>
+                    <select class="form-select journey-select" id="conductors_id" name="conductors_id" required>
+                        <?php foreach ($conductors as $conductor): ?>
+                            <option value="<?= (int) $conductor['conductors_id'] ?>" <?= (int) $conductor['conductors_id'] === (int) $journeyForm['conductors_id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($conductor['user_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="start_of_hours">Date/Heure depart</label>
+                    <input class="form-control" id="start_of_hours" name="start_of_hours" type="datetime-local" value="<?= htmlspecialchars($journeyForm['start_of_hours']) ?>" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="distance_miles">Distance estimee</label>
+                    <input class="form-control" id="distance_miles" type="text" value="" placeholder="Calculee automatiquement" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label for="travel_time_display">Duree estimee</label>
+                    <input class="form-control" id="travel_time_display" type="text" value="<?= htmlspecialchars($journeyForm['travel_time']) ?> h" readonly>
+                    <input type="hidden" id="travel_time" name="travel_time" value="<?= htmlspecialchars($journeyForm['travel_time']) ?>">
+                </div>
+
+                <div class="journey-editor-actions">
+                    <button type="submit" class="btn btn-primary" id="journey-submit"><?= $journeyForm['journey_id'] > 0 ? 'Modifier' : 'Creer' ?></button>
+                    <a class="btn btn-outline-secondary" href="index.php?page=Reservation">Annuler</a>
+                </div>
+            </form>
+        </section>
+    <?php endif; ?>
 
     <?php if ($journeyPendingDelete): ?>
         <section class="reservation-confirm-wrap" aria-modal="true" role="dialog">
@@ -521,11 +513,7 @@ foreach ($journeys as $journey) {
                                 </span>
                         </td>
                         <td>
-                            <?php if ($currentPassengerId === null): ?>
-                                <span class="badge bg-secondary">Non passager</span>
-                            <?php elseif ($currentConductorId !== null): ?>
-                                <span class="badge bg-dark">Conducteur</span>
-                            <?php elseif ($isReservedByMe): ?>
+                            <?php if ($isReservedByMe): ?>
                                 <span class="badge bg-primary">Reserve</span>
                             <?php else: ?>
                                 <span class="badge bg-light text-dark border">Non reserve</span>
@@ -533,19 +521,15 @@ foreach ($journeys as $journey) {
                         </td>
                         <td>
                             <div class="journey-action-stack">
-                                <?php if ($currentPassengerId !== null && $currentConductorId === null): ?>
-                                    <form method="POST" class="inline-form">
-                                        <input type="hidden" name="action" value="<?= $isReservedByMe ? 'cancel' : 'reserve' ?>">
-                                        <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
-                                        <button type="submit" class="btn btn-sm <?= $isReservedByMe ? 'btn-warning' : 'btn-success' ?>">
-                                            <?= $isReservedByMe ? 'Annuler' : 'Reserver' ?>
-                                        </button>
-                                    </form>
-                                <?php endif; ?>
-                                <?php if ($currentConductorId !== null && (int) $j['conductors_id'] === $currentConductorId): ?>
-                                    <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation&edit=<?= (int) $j['journeys_id'] ?>">Modifier</a>
-                                    <a class="btn btn-outline-danger btn-sm" href="index.php?page=Reservation&confirm_delete=<?= (int) $j['journeys_id'] ?>">Supprimer</a>
-                                <?php endif; ?>
+                                <form method="POST" class="inline-form">
+                                    <input type="hidden" name="action" value="<?= $isReservedByMe ? 'cancel' : 'reserve' ?>">
+                                    <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
+                                    <button type="submit" class="btn btn-sm <?= $isReservedByMe ? 'btn-warning' : 'btn-success' ?>">
+                                        <?= $isReservedByMe ? 'Annuler' : 'Reserver' ?>
+                                    </button>
+                                </form>
+                                <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation&edit=<?= (int) $j['journeys_id'] ?>">Modifier</a>
+                                <a class="btn btn-outline-danger btn-sm" href="index.php?page=Reservation&confirm_delete=<?= (int) $j['journeys_id'] ?>">Supprimer</a>
                             </div>
                         </td>
                     </tr>
