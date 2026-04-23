@@ -56,6 +56,8 @@
         watchId: null,
         mode: 'simulation',
         currentJourney: null,
+        carMarker: null,
+        lastBearing: 0,
     };
 
     async function ensureMapLibreAssets() {
@@ -124,6 +126,31 @@
         if (geoStartButton) {
             geoStartButton.disabled = mode === 'geolocation';
         }
+    }
+
+    function buildCarMarkerElement() {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'carpool-car-marker';
+        wrapper.style.width = '64px';
+        wrapper.style.height = '64px';
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.justifyContent = 'center';
+        wrapper.style.transformOrigin = '50% 50%';
+        wrapper.style.filter = 'drop-shadow(0 10px 18px rgba(21, 32, 54, 0.28))';
+
+        const image = document.createElement('img');
+        image.src = '/img/CarPool%20d%C3%A9tour%C3%A9.png';
+        image.alt = 'Voiture CarPool';
+        image.style.width = '64px';
+        image.style.height = '64px';
+        image.style.objectFit = 'contain';
+        image.style.pointerEvents = 'none';
+        image.draggable = false;
+
+        wrapper.appendChild(image);
+
+        return wrapper;
     }
 
     function formatDateTime(value) {
@@ -204,8 +231,16 @@
     }
 
     function setCarPosition(coordinates, progress = 0, shouldFollow = true) {
+        const previousCoordinates = pointGeoJson.geometry.coordinates;
         pointGeoJson.geometry.coordinates = coordinates;
         state.map.getSource('car-point').setData(pointGeoJson);
+
+        if (state.carMarker) {
+            state.lastBearing = computeBearing(previousCoordinates, coordinates);
+            state.carMarker.setLngLat(coordinates);
+            state.carMarker.setRotation(state.lastBearing);
+        }
+
         setProgress(progress);
 
         if (shouldFollow) {
@@ -222,6 +257,17 @@
         if (state.map && state.map.getSource('live-track')) {
             state.map.getSource('live-track').setData(liveTrackGeoJson);
         }
+    }
+
+    function computeBearing(from, to) {
+        const deltaLng = to[0] - from[0];
+        const deltaLat = to[1] - from[1];
+
+        if (deltaLng === 0 && deltaLat === 0) {
+            return state.lastBearing;
+        }
+
+        return Math.atan2(deltaLng, deltaLat) * 180 / Math.PI;
     }
 
     function resetRoutePosition() {
@@ -466,6 +512,11 @@
         state.map.getSource('route-line').setData(routeGeoJson);
         state.map.getSource('car-point').setData(pointGeoJson);
         state.map.getSource('live-track').setData(liveTrackGeoJson);
+        if (state.carMarker) {
+            state.lastBearing = 0;
+            state.carMarker.setLngLat(pointGeoJson.geometry.coordinates);
+            state.carMarker.setRotation(0);
+        }
         setMode('simulation');
         fitToRoute();
     }
@@ -528,17 +579,6 @@
                     type: 'geojson',
                     data: pointGeoJson,
                 });
-                state.map.addLayer({
-                    id: 'car-point-layer',
-                    type: 'circle',
-                    source: 'car-point',
-                    paint: {
-                        'circle-radius': 10,
-                        'circle-color': '#ff5f2e',
-                        'circle-stroke-width': 4,
-                        'circle-stroke-color': '#ffffff',
-                    },
-                });
 
                 state.map.addSource('live-track', {
                     type: 'geojson',
@@ -559,6 +599,15 @@
                         'line-dasharray': [1.2, 1.2],
                     },
                 });
+
+                state.carMarker = new maplibregl.Marker({
+                    element: buildCarMarkerElement(),
+                    anchor: 'center',
+                    rotationAlignment: 'map',
+                    pitchAlignment: 'map',
+                })
+                    .setLngLat(pointGeoJson.geometry.coordinates)
+                    .addTo(state.map);
 
                 await loadJourney(journeys[0].id);
             });
