@@ -86,8 +86,20 @@ $journeyOptions = array_map(
                         </div>
                     </div>
 
+                    <div class="map-progress-card">
+                        <div class="map-progress-head">
+                            <span>Mode de suivi</span>
+                            <strong id="map-mode-label">Simulation</strong>
+                        </div>
+                        <p class="map-copy mb-0">
+                            Lancez la simulation pour voir la voiture avancer toute seule, ou activez la geolocalisation pour suivre votre vraie position quand vous serez en voiture.
+                        </p>
+                    </div>
+
                     <div class="journey-action-stack map-controls">
-                        <button id="route-play" type="button" class="btn btn-primary">Lancer</button>
+                        <button id="route-play" type="button" class="btn btn-primary">Lancer la simulation</button>
+                        <button id="geo-start" type="button" class="btn btn-outline-primary">Activer la geolocalisation</button>
+                        <button id="geo-stop" type="button" class="btn btn-outline-secondary">Arreter le suivi</button>
                         <button id="route-reset" type="button" class="btn btn-outline-secondary">Revenir au depart</button>
                     </div>
 

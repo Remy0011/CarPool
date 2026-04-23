@@ -9,9 +9,12 @@
     const statusNode = document.getElementById('map-status');
     const selectNode = document.getElementById('journey-select');
     const playButton = document.getElementById('route-play');
+    const geoStartButton = document.getElementById('geo-start');
+    const geoStopButton = document.getElementById('geo-stop');
     const resetButton = document.getElementById('route-reset');
     const progressBar = document.getElementById('journey-progress-bar');
     const progressLabel = document.getElementById('journey-progress-label');
+    const modeLabel = document.getElementById('map-mode-label');
     const sidebarFields = {
         start: document.getElementById('journey-start'),
         final: document.getElementById('journey-final'),
@@ -37,11 +40,22 @@
         },
     };
 
+    const liveTrackGeoJson = {
+        type: 'Feature',
+        geometry: {
+            type: 'LineString',
+            coordinates: [],
+        },
+    };
+
     const state = {
         map: null,
         routeCoordinates: [],
         animationFrame: null,
         playing: false,
+        watchId: null,
+        mode: 'simulation',
+        currentJourney: null,
     };
 
     async function ensureMapLibreAssets() {
@@ -96,6 +110,19 @@
         }
         if (progressLabel) {
             progressLabel.textContent = value;
+        }
+    }
+
+    function setMode(mode) {
+        state.mode = mode;
+        if (modeLabel) {
+            modeLabel.textContent = mode === 'geolocation' ? 'Geolocalisation' : 'Simulation';
+        }
+        if (playButton) {
+            playButton.textContent = state.playing ? 'Pause simulation' : 'Lancer la simulation';
+        }
+        if (geoStartButton) {
+            geoStartButton.disabled = mode === 'geolocation';
         }
     }
 
@@ -156,19 +183,59 @@
         }
         state.playing = false;
         if (playButton) {
-            playButton.textContent = 'Lancer';
+            playButton.textContent = 'Lancer la simulation';
         }
     }
 
-    function updateCar(progress) {
-        pointGeoJson.geometry.coordinates = interpolateCoordinate(state.routeCoordinates, progress);
+    function updateLiveTrack(position) {
+        if (!state.map || !state.map.getSource('live-track')) {
+            return;
+        }
+
+        const existing = liveTrackGeoJson.geometry.coordinates;
+        const previous = existing[existing.length - 1];
+        const nextPoint = [Number(position[0]), Number(position[1])];
+
+        if (!previous || previous[0] !== nextPoint[0] || previous[1] !== nextPoint[1]) {
+            existing.push(nextPoint);
+        }
+
+        state.map.getSource('live-track').setData(liveTrackGeoJson);
+    }
+
+    function setCarPosition(coordinates, progress = 0, shouldFollow = true) {
+        pointGeoJson.geometry.coordinates = coordinates;
         state.map.getSource('car-point').setData(pointGeoJson);
         setProgress(progress);
+
+        if (shouldFollow) {
+            state.map.easeTo({
+                center: coordinates,
+                duration: 900,
+                essential: true,
+            });
+        }
+    }
+
+    function clearLiveTrack() {
+        liveTrackGeoJson.geometry.coordinates = [];
+        if (state.map && state.map.getSource('live-track')) {
+            state.map.getSource('live-track').setData(liveTrackGeoJson);
+        }
     }
 
     function resetRoutePosition() {
+        stopGeolocationTracking(false);
         stopAnimation();
-        updateCar(0);
+        clearLiveTrack();
+
+        if (!state.routeCoordinates.length) {
+            return;
+        }
+
+        setMode('simulation');
+        setCarPosition(state.routeCoordinates[0], 0, false);
+        fitToRoute();
         setStatus('Voiture replacee au point de depart.');
     }
 
@@ -177,9 +244,11 @@
             return;
         }
 
+        stopGeolocationTracking(false);
+        setMode('simulation');
         state.playing = true;
         if (playButton) {
-            playButton.textContent = 'En cours...';
+            playButton.textContent = 'Pause simulation';
         }
 
         const durationMs = 8000;
@@ -187,7 +256,8 @@
 
         const step = (timestamp) => {
             const progress = Math.min((timestamp - startTime) / durationMs, 1);
-            updateCar(progress);
+            const coordinates = interpolateCoordinate(state.routeCoordinates, progress);
+            setCarPosition(coordinates, progress, true);
 
             if (progress < 1 && state.playing) {
                 state.animationFrame = requestAnimationFrame(step);
@@ -199,6 +269,92 @@
         };
 
         state.animationFrame = requestAnimationFrame(step);
+    }
+
+    function estimateProgressFromPosition(position) {
+        if (!state.routeCoordinates.length) {
+            return 0;
+        }
+
+        let closestIndex = 0;
+        let closestDistance = Number.POSITIVE_INFINITY;
+
+        state.routeCoordinates.forEach((coordinate, index) => {
+            const deltaLng = coordinate[0] - position[0];
+            const deltaLat = coordinate[1] - position[1];
+            const distance = (deltaLng * deltaLng) + (deltaLat * deltaLat);
+
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestIndex = index;
+            }
+        });
+
+        return state.routeCoordinates.length > 1 ? closestIndex / (state.routeCoordinates.length - 1) : 0;
+    }
+
+    function stopGeolocationTracking(withMessage = true) {
+        if (state.watchId !== null && navigator.geolocation) {
+            navigator.geolocation.clearWatch(state.watchId);
+            state.watchId = null;
+        }
+
+        if (state.mode === 'geolocation') {
+            setMode('simulation');
+            if (withMessage) {
+                setStatus('Suivi GPS arrete. Vous pouvez relancer la simulation.');
+            }
+        }
+    }
+
+    function startGeolocationTracking() {
+        if (!navigator.geolocation) {
+            setStatus('La geolocalisation du navigateur n est pas disponible. Utilisez la simulation.', true);
+            return;
+        }
+
+        if (!state.map || !state.currentJourney) {
+            setStatus('Choisissez d abord un trajet pour activer le suivi.', true);
+            return;
+        }
+
+        stopGeolocationTracking(false);
+        stopAnimation();
+        clearLiveTrack();
+        setMode('geolocation');
+        setStatus('Demande d acces a la geolocalisation en cours...');
+
+        state.watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const coordinates = [
+                    position.coords.longitude,
+                    position.coords.latitude,
+                ];
+                const progress = estimateProgressFromPosition(coordinates);
+                updateLiveTrack(coordinates);
+                setCarPosition(coordinates, progress, true);
+                setStatus(`Position GPS recue. Precision approx. ${Math.round(position.coords.accuracy)} m.`);
+            },
+            (error) => {
+                stopGeolocationTracking(false);
+
+                let message = 'Impossible de recuperer votre position.';
+                if (error.code === error.PERMISSION_DENIED) {
+                    message = 'Geolocalisation refusee. Lancez la simulation pour illustrer le trajet.';
+                } else if (error.code === error.POSITION_UNAVAILABLE) {
+                    message = 'Position indisponible pour le moment. La simulation reste disponible.';
+                } else if (error.code === error.TIMEOUT) {
+                    message = 'Le GPS met trop de temps a repondre. Essayez la simulation.';
+                }
+
+                setStatus(message, true);
+            },
+            {
+                enableHighAccuracy: true,
+                maximumAge: 1000,
+                timeout: 10000,
+            }
+        );
     }
 
     function fitToRoute() {
@@ -282,7 +438,10 @@
             return;
         }
 
+        state.currentJourney = journey;
+        stopGeolocationTracking(false);
         stopAnimation();
+        clearLiveTrack();
         updateSidebar(journey);
         setStatus(`Chargement de l itineraire ${journey.start} -> ${journey.final}...`);
         setProgress(0);
@@ -306,6 +465,8 @@
         pointGeoJson.geometry.coordinates = state.routeCoordinates[0];
         state.map.getSource('route-line').setData(routeGeoJson);
         state.map.getSource('car-point').setData(pointGeoJson);
+        state.map.getSource('live-track').setData(liveTrackGeoJson);
+        setMode('simulation');
         fitToRoute();
     }
 
@@ -379,6 +540,26 @@
                     },
                 });
 
+                state.map.addSource('live-track', {
+                    type: 'geojson',
+                    data: liveTrackGeoJson,
+                });
+                state.map.addLayer({
+                    id: 'live-track-layer',
+                    type: 'line',
+                    source: 'live-track',
+                    layout: {
+                        'line-cap': 'round',
+                        'line-join': 'round',
+                    },
+                    paint: {
+                        'line-color': '#ff8a00',
+                        'line-width': 5,
+                        'line-opacity': 0.85,
+                        'line-dasharray': [1.2, 1.2],
+                    },
+                });
+
                 await loadJourney(journeys[0].id);
             });
         } catch (error) {
@@ -396,10 +577,21 @@
         playButton.addEventListener('click', () => {
             if (state.playing) {
                 stopAnimation();
-                setStatus('Animation mise en pause.');
+                setStatus('Simulation mise en pause.');
                 return;
             }
             startAnimation();
+        });
+    }
+
+    if (geoStartButton) {
+        geoStartButton.addEventListener('click', startGeolocationTracking);
+    }
+
+    if (geoStopButton) {
+        geoStopButton.addEventListener('click', () => {
+            stopGeolocationTracking(true);
+            stopAnimation();
         });
     }
 
