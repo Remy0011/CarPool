@@ -81,6 +81,11 @@ function buildJourneyPayload(array $input): array
         throw new InvalidArgumentException('Format de date de départ invalide.');
     }
 
+    $now = new DateTime('now');
+    if ($startDate < $now) {
+        throw new InvalidArgumentException('La date et l heure de depart doivent etre dans le futur.');
+    }
+
     // 2. Parse Duration (travel_time) and calculate End Date
     // We expect HH:mm from the time input
     list($hours, $minutes) = explode(':', $durationInput);
@@ -96,6 +101,34 @@ function buildJourneyPayload(array $input): array
             'start_of_hours' => $startDate->format('Y-m-d H:i:s'), // DB Format
             'end_of_hours'   => $endDate->format('Y-m-d H:i:s'),   // Calculated
             'conductors_id'  => $conductorsId,
+    ];
+}
+
+function getJourneyCapacityAndReservations(PDO $pdo, int $journeyId): ?array
+{
+    $stmt = $pdo->prepare('
+        SELECT c.place_available AS capacity, COUNT(a.passengers_id) AS reserved
+        FROM CONDUIRE cd
+        JOIN conductors c ON cd.conductors_id = c.conductors_id
+        LEFT JOIN ASSO4 a ON a.journeys_id = cd.journeys_id
+        WHERE cd.journeys_id = ?
+        GROUP BY c.place_available
+        LIMIT 1
+    ');
+    $stmt->execute([$journeyId]);
+    $result = $stmt->fetch();
+
+    if (!$result) {
+        return null;
+    }
+
+    $capacity = max(0, (int) $result['capacity']);
+    $reserved = max(0, (int) $result['reserved']);
+
+    return [
+        'capacity' => $capacity,
+        'reserved' => $reserved,
+        'remaining' => max(0, $capacity - $reserved),
     ];
 }
 
@@ -126,16 +159,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Vous avez deja reserve ce trajet.';
                     $messageType = 'info';
                 } else {
-                    $places = $pdo->prepare('
-                        SELECT c.place_available
-                        FROM CONDUIRE cd
-                        JOIN conductors c ON cd.conductors_id = c.conductors_id
-                        WHERE cd.journeys_id = ?
-                    ');
-                    $places->execute([$journeyId]);
-                    $placeInfo = $places->fetch();
+                    $placeInfo = getJourneyCapacityAndReservations($pdo, $journeyId);
 
-                    if (!$placeInfo || (int) $placeInfo['place_available'] <= 0) {
+                    if (!$placeInfo || $placeInfo['remaining'] <= 0) {
                         $message = 'Plus de places disponibles pour ce trajet.';
                         $messageType = 'danger';
                     } else {
@@ -143,15 +169,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         $insert = $pdo->prepare('INSERT INTO ASSO4 (passengers_id, journeys_id) VALUES (?, ?)');
                         $insert->execute([$passengerId, $journeyId]);
-
-                        // Get conductor_id for this journey
-                        $getConductor = $pdo->prepare('SELECT conductors_id FROM CONDUIRE WHERE journeys_id = ?');
-                        $getConductor->execute([$journeyId]);
-                        $conductorInfo = $getConductor->fetch();
-
-                        // Decrease available places by 1
-                        $updatePlaces = $pdo->prepare('UPDATE conductors SET place_available = place_available - 1 WHERE conductors_id = ?');
-                        $updatePlaces->execute([$conductorInfo['conductors_id']]);
 
                         $pdo->commit();
 
@@ -174,15 +191,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $delete->execute([$passengerId, $journeyId]);
 
                 if ($delete->rowCount() > 0) {
-                    // Get conductor_id for this journey
-                    $getConductor = $pdo->prepare('SELECT conductors_id FROM CONDUIRE WHERE journeys_id = ?');
-                    $getConductor->execute([$journeyId]);
-                    $conductorInfo = $getConductor->fetch();
-
-                    // Increase available places by 1
-                    $updatePlaces = $pdo->prepare('UPDATE conductors SET place_available = place_available + 1 WHERE conductors_id = ?');
-                    $updatePlaces->execute([$conductorInfo['conductors_id']]);
-
                     $pdo->commit();
 
                     $message = 'Reservation annulee avec succes.';
@@ -214,10 +222,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $linkConductor = $pdo->prepare('INSERT INTO CONDUIRE (conductors_id, journeys_id) VALUES (?, ?)');
             $linkConductor->execute([$payload['conductors_id'], $journeyId]);
-
-            // Set place_available to 4 for new journey
-            $updatePlaces = $pdo->prepare('UPDATE conductors SET place_available = 4 WHERE conductors_id = ?');
-            $updatePlaces->execute([$payload['conductors_id']]);
 
             $pdo->commit();
 
@@ -405,7 +409,7 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
 
                 <div class="form-group">
                     <label for="start_of_hours">Date/Heure depart</label>
-                    <input class="form-control" id="start_of_hours" name="start_of_hours" type="datetime-local" value="<?= htmlspecialchars($journeyForm['start_of_hours']) ?>" required>
+                    <input class="form-control" id="start_of_hours" name="start_of_hours" type="datetime-local" value="<?= htmlspecialchars($journeyForm['start_of_hours']) ?>" min="<?= date('Y-m-d\TH:i') ?>" required>
                 </div>
 
                 <div class="form-group">
@@ -465,8 +469,8 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
                         <label>Places</label>
                         <?php
                         $pendingReserved = $reservationCounts[(int) $journeyPendingDelete['journeys_id']] ?? 0;
-                        $pendingRemaining = max(0, (int) $journeyPendingDelete['place_available']);
-                        $pendingTotalPlaces = $pendingRemaining + $pendingReserved;
+                        $pendingTotalPlaces = max(0, (int) $journeyPendingDelete['place_available']);
+                        $pendingRemaining = max(0, $pendingTotalPlaces - $pendingReserved);
                         ?>
                         <div class="journey-field-box"><?= $pendingRemaining ?> / <?= $pendingTotalPlaces ?></div>
                     </div>
@@ -505,8 +509,8 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
                 <tbody>
                 <?php foreach ($journeys as $j):
                     $reserved = $reservationCounts[(int) $j['journeys_id']] ?? 0;
-                    $remaining = max(0, (int) $j['place_available']);
-                    $totalPlaces = $remaining + $reserved;
+                    $totalPlaces = max(0, (int) $j['place_available']);
+                    $remaining = max(0, $totalPlaces - $reserved);
                     $isReservedByMe = !empty($myReservations[(int) $j['journeys_id']]);
                     ?>
                     <tr>
@@ -552,16 +556,32 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
 (() => {
     const startField = document.getElementById('start');
     const finalField = document.getElementById('final');
+    const startOfHoursField = document.getElementById('start_of_hours');
     const distanceField = document.getElementById('distance_miles');
     const durationDisplayField = document.getElementById('travel_time_display');
     const durationField = document.getElementById('travel_time');
     const submitButton = document.getElementById('journey-submit');
 
-    if (!startField || !finalField || !distanceField || !durationDisplayField || !durationField) {
+    if (!startField || !finalField || !startOfHoursField || !distanceField || !durationDisplayField || !durationField) {
         return;
     }
 
     let debounceTimer = null;
+
+    function getCurrentLocalDateTime() {
+        const now = new Date();
+        const offset = now.getTimezoneOffset();
+        return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 16);
+    }
+
+    function syncMinDateTime() {
+        const minDateTime = getCurrentLocalDateTime();
+        startOfHoursField.min = minDateTime;
+
+        if (startOfHoursField.value && startOfHoursField.value < minDateTime) {
+            startOfHoursField.value = minDateTime;
+        }
+    }
 
     function setPendingState(message) {
         distanceField.value = message;
@@ -691,6 +711,11 @@ $showJourneyForm = $journeyForm['journey_id'] > 0 || (isset($_GET['show_form']) 
 
     startField.addEventListener('input', queueCalculation);
     finalField.addEventListener('input', queueCalculation);
+    startOfHoursField.addEventListener('focus', syncMinDateTime);
+    startOfHoursField.addEventListener('input', syncMinDateTime);
+
+    syncMinDateTime();
+    window.setInterval(syncMinDateTime, 30000);
 
     if (startField.value.trim() !== '' && finalField.value.trim() !== '') {
         calculateRoute();
