@@ -20,6 +20,20 @@ function findPassengerId(PDO $pdo, string $email): ?int
     return $passenger ? (int) $passenger['passengers_id'] : null;
 }
 
+function findConductorId(PDO $pdo, string $email): ?int
+{
+    $stmt = $pdo->prepare('
+        SELECT c.conductors_id
+        FROM conductors c
+        JOIN users u ON c.users_id = u.users_id
+        WHERE u.user_email = ?
+    ');
+    $stmt->execute([$email]);
+    $conductor = $stmt->fetch();
+
+    return $conductor ? (int) $conductor['conductors_id'] : null;
+}
+
 function buildJourneyPayload(array $input): array
 {
     $startLocation = trim($input['start'] ?? '');
@@ -30,6 +44,10 @@ function buildJourneyPayload(array $input): array
 
     if ($startLocation === '' || $finalLocation === '' || $durationInput === '' || $startOfHours === '' || $conductorsId <= 0) {
         throw new InvalidArgumentException('Tous les champs sont obligatoires.');
+    }
+
+    if (!preg_match('/^\d{2}:\d{2}$/', $durationInput)) {
+        throw new InvalidArgumentException('La duree doit etre calculee automatiquement avant l enregistrement.');
     }
 
     // 1. Parse the Start Date (from datetime-local input)
@@ -58,13 +76,18 @@ function buildJourneyPayload(array $input): array
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? 'reserve';
+    $currentConductorRole = findConductorId($pdo, $_SESSION['user_email']);
+    $currentPassengerRole = findPassengerId($pdo, $_SESSION['user_email']);
 
     try {
         if ($action === 'reserve' && isset($_POST['journey_id'])) {
             $journeyId = (int) $_POST['journey_id'];
-            $passengerId = findPassengerId($pdo, $_SESSION['user_email']);
+            $passengerId = $currentPassengerRole;
 
-            if ($passengerId === null) {
+            if ($currentConductorRole !== null) {
+                $message = 'Un conducteur ne peut pas reserver comme passager.';
+                $messageType = 'warning';
+            } elseif ($passengerId === null) {
                 $message = 'Vous n\'etes pas enregistre comme passager.';
                 $messageType = 'warning';
             } else {
@@ -76,16 +99,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $messageType = 'info';
                 } else {
                     $places = $pdo->prepare('
-                        SELECT c.place_available,
-                               (SELECT COUNT(*) FROM ASSO4 a WHERE a.journeys_id = ?) AS reserved
+                        SELECT c.place_available
                         FROM CONDUIRE cd
                         JOIN conductors c ON cd.conductors_id = c.conductors_id
                         WHERE cd.journeys_id = ?
                     ');
-                    $places->execute([$journeyId, $journeyId]);
+                    $places->execute([$journeyId]);
                     $placeInfo = $places->fetch();
 
-                    if (!$placeInfo || (int) $placeInfo['reserved'] >= (int) $placeInfo['place_available']) {
+                    if (!$placeInfo || (int) $placeInfo['place_available'] <= 0) {
                         $message = 'Plus de places disponibles pour ce trajet.';
                         $messageType = 'danger';
                     } else {
@@ -112,9 +134,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } elseif ($action === 'cancel' && isset($_POST['journey_id'])) {
             $journeyId = (int) $_POST['journey_id'];
-            $passengerId = findPassengerId($pdo, $_SESSION['user_email']);
+            $passengerId = $currentPassengerRole;
 
-            if ($passengerId === null) {
+            if ($currentConductorRole !== null) {
+                $message = 'Un conducteur ne peut pas annuler une reservation passager.';
+                $messageType = 'warning';
+            } elseif ($passengerId === null) {
                 $message = 'Vous n\'etes pas enregistre comme passager.';
                 $messageType = 'warning';
             } else {
@@ -144,6 +169,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } elseif ($action === 'create') {
+            if ($currentConductorRole === null) {
+                throw new InvalidArgumentException('Seuls les conducteurs peuvent creer un trajet.');
+            }
+
+            $_POST['conductors_id'] = (string) $currentConductorRole;
             $payload = buildJourneyPayload($_POST);
 
             $pdo->beginTransaction();
@@ -175,6 +205,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'success';
         } elseif ($action === 'update' && isset($_POST['journey_id'])) {
             $journeyId = (int) $_POST['journey_id'];
+            if ($currentConductorRole === null) {
+                throw new InvalidArgumentException('Seuls les conducteurs peuvent modifier un trajet.');
+            }
+
+            $ownershipStmt = $pdo->prepare('SELECT conductors_id FROM CONDUIRE WHERE journeys_id = ?');
+            $ownershipStmt->execute([$journeyId]);
+            $ownerConductorId = (int) $ownershipStmt->fetchColumn();
+            if ($ownerConductorId !== $currentConductorRole) {
+                throw new InvalidArgumentException('Vous ne pouvez modifier que vos propres trajets.');
+            }
+
+            $_POST['conductors_id'] = (string) $currentConductorRole;
             $payload = buildJourneyPayload($_POST);
 
             $pdo->beginTransaction();
@@ -203,6 +245,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $editJourneyId = 0;
         } elseif ($action === 'delete' && isset($_POST['journey_id'])) {
             $journeyId = (int) $_POST['journey_id'];
+            if ($currentConductorRole === null) {
+                throw new InvalidArgumentException('Seuls les conducteurs peuvent supprimer un trajet.');
+            }
+
+            $ownershipStmt = $pdo->prepare('SELECT conductors_id FROM CONDUIRE WHERE journeys_id = ?');
+            $ownershipStmt->execute([$journeyId]);
+            $ownerConductorId = (int) $ownershipStmt->fetchColumn();
+            if ($ownerConductorId !== $currentConductorRole) {
+                throw new InvalidArgumentException('Vous ne pouvez supprimer que vos propres trajets.');
+            }
 
             $deleteJourney = $pdo->prepare('DELETE FROM journeys WHERE journeys_id = ?');
             $deleteJourney->execute([$journeyId]);
@@ -222,6 +274,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $messageType = 'danger';
     }
 }
+
+$currentPassengerId = findPassengerId($pdo, $_SESSION['user_email']);
+$currentConductorId = findConductorId($pdo, $_SESSION['user_email']);
 
 $conductors = $pdo->query('
     SELECT c.conductors_id, c.place_available, u.user_name
@@ -255,10 +310,20 @@ $journeyForm = [
         'journey_id' => 0,
         'start' => '',
         'final' => '',
-        'conductors_id' => $conductors[0]['conductors_id'] ?? 0,
+        'conductors_id' => $currentConductorId ?: ($conductors[0]['conductors_id'] ?? 0),
         'start_of_hours' => '',
         'travel_time' => '00:30',
 ];
+
+$myReservations = [];
+if ($currentPassengerId !== null && $journeys) {
+    $reservedByMeStmt = $pdo->prepare('SELECT journeys_id FROM ASSO4 WHERE passengers_id = ?');
+    $reservedByMeStmt->execute([$currentPassengerId]);
+
+    foreach ($reservedByMeStmt->fetchAll() as $row) {
+        $myReservations[(int) $row['journeys_id']] = true;
+    }
+}
 
 foreach ($journeys as $journey) {
     if ((int) $journey['journeys_id'] === $editJourneyId) {
@@ -299,13 +364,22 @@ foreach ($journeys as $journey) {
         </div>
     <?php endif; ?>
 
+    <?php if ($currentConductorId !== null): ?>
+        <div class="alert alert-info">Compte conducteur detecte. Vous pouvez gerer vos trajets, mais pas reserver comme passager.</div>
+    <?php elseif ($currentPassengerId !== null): ?>
+        <div class="alert alert-info">Compte passager detecte. Vous pouvez reserver ou annuler vos reservations, mais pas creer de trajet.</div>
+    <?php endif; ?>
+
     <section class="journey-editor-card">
         <div class="journey-editor-head">
             <h3 class="mb-1"><?= $journeyForm['journey_id'] > 0 ? 'Modifier un trajet' : 'Creer un trajet' ?></h3>
-            <p class="mb-0">Renseignez Depart, Arrivee, Conducteur, Date/Heure depart et Duree. Les places disponibles seront automatiquement gerees (max 5).</p>
+            <p class="mb-0">Renseignez Depart, Arrivee et Date/Heure depart. La distance en miles et la duree sont calculees automatiquement.</p>
         </div>
         <form method="POST" class="journey-editor-grid">
             <input type="hidden" name="action" value="<?= $journeyForm['journey_id'] > 0 ? 'update' : 'create' ?>">
+            <?php if ($currentConductorId !== null): ?>
+                <input type="hidden" name="conductors_id" value="<?= (int) $currentConductorId ?>">
+            <?php endif; ?>
             <?php if ($journeyForm['journey_id'] > 0): ?>
                 <input type="hidden" name="journey_id" value="<?= $journeyForm['journey_id'] ?>">
             <?php endif; ?>
@@ -321,14 +395,8 @@ foreach ($journeys as $journey) {
             </div>
 
             <div class="form-group">
-                <label for="conductors_id">Conducteur</label>
-                <select class="form-select journey-select" id="conductors_id" name="conductors_id" required>
-                    <?php foreach ($conductors as $conductor): ?>
-                        <option value="<?= (int) $conductor['conductors_id'] ?>" <?= (int) $conductor['conductors_id'] === (int) $journeyForm['conductors_id'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($conductor['user_name']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <label for="conductors_display">Conducteur</label>
+                <input class="form-control" id="conductors_display" type="text" value="<?= htmlspecialchars($_SESSION['user_name']) ?>" readonly>
             </div>
 
             <div class="form-group">
@@ -337,14 +405,24 @@ foreach ($journeys as $journey) {
             </div>
 
             <div class="form-group">
-                <label for="travel_time">Duree</label>
-                <input class="form-control" id="travel_time" name="travel_time" type="time" step="60" value="<?= htmlspecialchars($journeyForm['travel_time']) ?>" required>
+                <label for="distance_miles">Distance estimee</label>
+                <input class="form-control" id="distance_miles" type="text" value="" placeholder="Calculee automatiquement" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="travel_time_display">Duree estimee</label>
+                <input class="form-control" id="travel_time_display" type="text" value="<?= htmlspecialchars($journeyForm['travel_time']) ?> h" readonly>
+                <input type="hidden" id="travel_time" name="travel_time" value="<?= htmlspecialchars($journeyForm['travel_time']) ?>">
             </div>
 
             <div class="journey-editor-actions">
-                <button type="submit" class="btn btn-primary"><?= $journeyForm['journey_id'] > 0 ? 'Modifier' : 'Creer' ?></button>
-                <?php if ($journeyForm['journey_id'] > 0): ?>
-                    <a class="btn btn-outline-secondary" href="index.php?page=Reservation">Annuler</a>
+                <?php if ($currentConductorId !== null): ?>
+                    <button type="submit" class="btn btn-primary" id="journey-submit"><?= $journeyForm['journey_id'] > 0 ? 'Modifier' : 'Creer' ?></button>
+                    <?php if ($journeyForm['journey_id'] > 0): ?>
+                        <a class="btn btn-outline-secondary" href="index.php?page=Reservation">Annuler</a>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <button type="button" class="btn btn-secondary" disabled>Mode passager uniquement</button>
                 <?php endif; ?>
             </div>
         </form>
@@ -420,6 +498,7 @@ foreach ($journeys as $journey) {
                     <th>Date/Heure depart</th>
                     <th>Duree</th>
                     <th>Places disponibles</th>
+                    <th>Ma reservation</th>
                     <th>Actions</th>
                 </tr>
                 </thead>
@@ -428,6 +507,7 @@ foreach ($journeys as $journey) {
                     $reserved = $reservationCounts[(int) $j['journeys_id']] ?? 0;
                     $remaining = max(0, (int) $j['place_available']);
                     $totalPlaces = $remaining + $reserved;
+                    $isReservedByMe = !empty($myReservations[(int) $j['journeys_id']]);
                     ?>
                     <tr>
                         <td><?= htmlspecialchars($j['start']) ?></td>
@@ -441,10 +521,31 @@ foreach ($journeys as $journey) {
                                 </span>
                         </td>
                         <td>
+                            <?php if ($currentPassengerId === null): ?>
+                                <span class="badge bg-secondary">Non passager</span>
+                            <?php elseif ($currentConductorId !== null): ?>
+                                <span class="badge bg-dark">Conducteur</span>
+                            <?php elseif ($isReservedByMe): ?>
+                                <span class="badge bg-primary">Reserve</span>
+                            <?php else: ?>
+                                <span class="badge bg-light text-dark border">Non reserve</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
                             <div class="journey-action-stack">
-                                <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation&edit=<?= (int) $j['journeys_id'] ?>">Modifier</a>
-
-                                <a class="btn btn-outline-danger btn-sm" href="index.php?page=Reservation&confirm_delete=<?= (int) $j['journeys_id'] ?>">Supprimer</a>
+                                <?php if ($currentPassengerId !== null && $currentConductorId === null): ?>
+                                    <form method="POST" class="inline-form">
+                                        <input type="hidden" name="action" value="<?= $isReservedByMe ? 'cancel' : 'reserve' ?>">
+                                        <input type="hidden" name="journey_id" value="<?= (int) $j['journeys_id'] ?>">
+                                        <button type="submit" class="btn btn-sm <?= $isReservedByMe ? 'btn-warning' : 'btn-success' ?>">
+                                            <?= $isReservedByMe ? 'Annuler' : 'Reserver' ?>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                                <?php if ($currentConductorId !== null && (int) $j['conductors_id'] === $currentConductorId): ?>
+                                    <a class="btn btn-outline-secondary btn-sm" href="index.php?page=Reservation&edit=<?= (int) $j['journeys_id'] ?>">Modifier</a>
+                                    <a class="btn btn-outline-danger btn-sm" href="index.php?page=Reservation&confirm_delete=<?= (int) $j['journeys_id'] ?>">Supprimer</a>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
@@ -454,3 +555,154 @@ foreach ($journeys as $journey) {
         </div>
     <?php endif; ?>
 </main>
+<script>
+(() => {
+    const startField = document.getElementById('start');
+    const finalField = document.getElementById('final');
+    const distanceField = document.getElementById('distance_miles');
+    const durationDisplayField = document.getElementById('travel_time_display');
+    const durationField = document.getElementById('travel_time');
+    const submitButton = document.getElementById('journey-submit');
+
+    if (!startField || !finalField || !distanceField || !durationDisplayField || !durationField) {
+        return;
+    }
+
+    let debounceTimer = null;
+
+    function setPendingState(message) {
+        distanceField.value = message;
+        durationDisplayField.value = message;
+        durationField.value = '';
+        if (submitButton) {
+            submitButton.disabled = true;
+        }
+    }
+
+    function setComputedState(distanceMiles, durationMinutes) {
+        const roundedMiles = Math.round(distanceMiles * 10) / 10;
+        const totalMinutes = Math.max(1, Math.round(durationMinutes));
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const safeHours = String(hours).padStart(2, '0');
+        const safeMinutes = String(minutes).padStart(2, '0');
+
+        distanceField.value = `${roundedMiles} miles`;
+        durationDisplayField.value = `${safeHours}:${safeMinutes} h`;
+        durationField.value = `${safeHours}:${safeMinutes}`;
+        if (submitButton) {
+            submitButton.disabled = false;
+        }
+    }
+
+    function fallbackCoordinates(place) {
+        const lookup = {
+            paris: [2.3522, 48.8566],
+            lyon: [4.8357, 45.7640],
+            marseille: [5.3698, 43.2965],
+            nancy: [6.1844, 48.6921],
+            metz: [6.1757, 49.1193],
+            lille: [3.0573, 50.6292],
+            strasbourg: [7.7521, 48.5734],
+            toulouse: [1.4442, 43.6047],
+            bordeaux: [-0.5792, 44.8378],
+        };
+
+        return lookup[String(place || '').trim().toLowerCase()] || null;
+    }
+
+    async function geocodePlace(place) {
+        const url = new URL('https://nominatim.openstreetmap.org/search');
+        url.searchParams.set('format', 'json');
+        url.searchParams.set('limit', '1');
+        url.searchParams.set('q', place);
+
+        const response = await fetch(url.toString(), {
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('Geocoding indisponible');
+        }
+
+        const results = await response.json();
+        if (!Array.isArray(results) || results.length === 0) {
+            throw new Error(`Lieu introuvable : ${place}`);
+        }
+
+        return [Number(results[0].lon), Number(results[0].lat)];
+    }
+
+    async function fetchRouteMetrics(startCoordinates, endCoordinates) {
+        const url = new URL(`https://router.project-osrm.org/route/v1/driving/${startCoordinates[0]},${startCoordinates[1]};${endCoordinates[0]},${endCoordinates[1]}`);
+        url.searchParams.set('overview', 'false');
+
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+            throw new Error('Calcul d itineraire indisponible');
+        }
+
+        const data = await response.json();
+        const route = data?.routes?.[0];
+        if (!route) {
+            throw new Error('Itineraire introuvable');
+        }
+
+        return {
+            distanceMiles: Number(route.distance) * 0.000621371,
+            durationMinutes: Number(route.duration) / 60,
+        };
+    }
+
+    async function calculateRoute() {
+        const start = startField.value.trim();
+        const final = finalField.value.trim();
+
+        if (start === '' || final === '') {
+            setPendingState('Renseignez les villes');
+            return;
+        }
+
+        setPendingState('Calcul en cours...');
+
+        try {
+            let startCoordinates;
+            let endCoordinates;
+
+            try {
+                [startCoordinates, endCoordinates] = await Promise.all([
+                    geocodePlace(start),
+                    geocodePlace(final),
+                ]);
+            } catch (error) {
+                startCoordinates = fallbackCoordinates(start);
+                endCoordinates = fallbackCoordinates(final);
+                if (!startCoordinates || !endCoordinates) {
+                    throw error;
+                }
+            }
+
+            const metrics = await fetchRouteMetrics(startCoordinates, endCoordinates);
+            setComputedState(metrics.distanceMiles, metrics.durationMinutes);
+        } catch (error) {
+            setPendingState('Calcul impossible');
+        }
+    }
+
+    function queueCalculation() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(calculateRoute, 400);
+    }
+
+    startField.addEventListener('input', queueCalculation);
+    finalField.addEventListener('input', queueCalculation);
+
+    if (startField.value.trim() !== '' && finalField.value.trim() !== '') {
+        calculateRoute();
+    } else {
+        setPendingState('Renseignez les villes');
+    }
+})();
+</script>
