@@ -1,37 +1,53 @@
-<!--Navbar -->
-<nav class="navbar navbar-expand-lg bg-dark" data-bs-theme="dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="#">CARPOOL</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarColor02" aria-controls="navbarColor02" aria-expanded="false" aria-label="Toggle navigation">
+<?php
+$currentPage = $_GET['page'] ?? 'home';
+$userName = htmlspecialchars($_SESSION['user_name'] ?? 'Utilisateur');
+?>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container">
+        <a class="navbar-brand fw-semibold" href="index.php?page=home">
+            <span class="brand-mark">
+                <img class="brand-logo" src="img/CarPool détouré.png" alt="CarPool logo">
+                <span>CarPool</span>
+            </span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Basculer la navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <div class="collapse navbar-collapse" id="navbarColor02">
-            <ul class="navbar-nav me-auto">
+        <div class="collapse navbar-collapse" id="mainNavbar">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
-                    <a class="nav-link active" href="index.php">Accueil
-                        <span class="visually-hidden">(current)</span>
+                    <a class="nav-link <?= $currentPage === 'home' ? 'active' : '' ?>" href="index.php?page=home">Accueil</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?= $currentPage === 'Reservation' ? 'active' : '' ?>" href="index.php?page=Reservation">Reservations</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link <?= $currentPage === 'Map' ? 'active' : '' ?>" href="index.php?page=Map">Carte</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link nav-link-with-icon <?= $currentPage === 'Profil' ? 'active' : '' ?>" href="index.php?page=Profil">
+                        <span class="nav-icon-badge" aria-hidden="true">
+                            <img class="nav-icon" src="img/img_icons/user.png" alt="">
+                        </span>
+                        <span>Profil</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="?page=Profil">Profil</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="?page=Reservation">Réservation</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="?page=Map">Map</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="?page=Parametre">Paramètres</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="deconnexion.php">Déconnexion</a>
+                    <a class="nav-link nav-link-with-icon <?= $currentPage === 'Parametre' ? 'active' : '' ?>" href="index.php?page=Parametre">
+                        <span class="nav-icon-badge" aria-hidden="true">
+                            <img class="nav-icon" src="img/img_icons/settings.png" alt="">
+                        </span>
+                        <span>Parametres</span>
+                    </a>
                 </li>
             </ul>
-            <form class="d-flex">
-                <input class="form-control me-sm-2" type="search" placeholder="Rechercher">
-                <button class="btn btn-secondary my-2 my-sm-0" type="submit">Rechercher</button>
-            </form>
+            <div class="d-flex align-items-center gap-3">
+                <span class="navbar-text text-white-50"><?= $userName ?></span>
+                <form method="post" action="deconnexion.php" class="mb-0">
+                    <?= csrfInput() ?>
+                    <button type="submit" class="btn btn-outline-light btn-sm">Deconnexion</button>
+                </form>
+            </div>
         </div>
     </div>
 </nav>

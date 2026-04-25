@@ -6,6 +6,12 @@ services:
       - "5780:80"
     volumes:
       - ./public:/var/www/html
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: mydatabase
+      DB_USER: user
+      DB_PASS: password
     depends_on:
       - mysql
 
@@ -22,6 +28,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace CarPool\Tests;
+
 use PHPUnit\Framework\TestCase;
 
 final class RoutingTest extends TestCase

@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+namespace CarPool\Tests;
+
+use PDO;
 use PHPUnit\Framework\TestCase;
 
 final class ConfigTest extends TestCase

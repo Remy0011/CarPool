@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/config.php';
+applySecurityHeaders();
 
 // Redirect to login if not authenticated
 if (!isset($_SESSION['user_name'], $_SESSION['user_email'])) {
@@ -11,17 +12,32 @@ if (!isset($_SESSION['user_name'], $_SESSION['user_email'])) {
 $allowed_pages = ['home', 'Profil', 'Reservation', 'Map', 'Parametre'];
 
 $page = $_GET['page'] ?? 'home';
+$isNotFound = false;
 
 if (!in_array($page, $allowed_pages, true)) {
     $page = '404';
+    $isNotFound = true;
 }
 
-require 'doctype.php';
-require 'navbar.php';
+if ($isNotFound) {
+    http_response_code(404);
+}
+
+$baseDir = __DIR__;
+
+require $baseDir . '/doctype.php';
+
+if (!$isNotFound) {
+    require $baseDir . '/navbar.php';
+}
 
 // on charge la page voulue
-require $page . '.php';
+require $baseDir . '/' . $page . '.php';
 
 // require footer
-require 'footer.php';
+if (!$isNotFound) {
+    require $baseDir . '/footer.php';
+} else {
+    echo '</body></html>';
+}
 ?>
